@@ -4,14 +4,16 @@ on:
   push:
     branches: [ main, develop ]
     paths:
-      - 'web-client/**'
-      - 'web-admin/**'
+      - 'web/web-client/**'
+      - 'web/web-admin/**'
+      - 'web/ui/**'
       - '.github/workflows/web.yml'
   pull_request:
     branches: [ main, develop ]
     paths:
-      - 'web-client/**'
-      - 'web-admin/**'
+      - 'web/web-client/**'
+      - 'web/web-admin/**'
+      - 'web/ui/**'
 
 jobs:
   build:
@@ -22,10 +24,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     defaults:
       run:
-        working-directory: ${{ matrix.app }}
+        working-directory: web/${{ matrix.app }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # 先安装 pnpm，再让 setup-node 使用 pnpm 缓存，避免因未找到 pnpm 导致缓存路径解析失败
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,13 +41,13 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-
-      - name: Install dependencies
+      - name: Install workspace dependencies (root)
         run: pnpm install --frozen-lockfile
+        working-directory: .
+
+      - name: Build UI library first (@vistack/ui)
+        run: pnpm -F @vistack/ui build
+        working-directory: .
 
       - name: Type check and build
         run: pnpm build
@@ -49,4 +57,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.app }}-dist-${{ matrix.os }}
-          path: ${{ matrix.app }}/dist
+          path: web/${{ matrix.app }}/dist

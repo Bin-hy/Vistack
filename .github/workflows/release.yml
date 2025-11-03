@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GO_VERSION: '1.25.0'
+      PROJECT_NAME: vistack
     strategy:
       matrix:
         include:
@@ -30,9 +31,6 @@ jobs:
           - goos: darwin
             goarch: arm64
             ext: ""
-
-    env:
-      PROJECT_NAME: vistack
 
     steps:
       - name: Checkout code
