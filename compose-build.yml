@@ -1,0 +1,23 @@
+services:
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile.build
+      target: builder
+      platform: linux/amd64
+      args:
+        # 编译产物的前缀名（与 Dockerfile.build 中的 ARG PROJECT_NAME 对应）
+        PROJECT_NAME: vistack
+    command: sh -c "mkdir -p /out && rm -rf /out/* && cp -r /workspace/build/* /out/ && echo 'Artifacts copied to mounted ./build folder'"
+    volumes:
+      # 将编译产物拷贝到宿主机的 ./build 目录
+      - ./build:/out
+    restart: "no"
+
+# 使用方式：
+# 1) 首次构建并输出产物到本地 build/ 目录
+#    docker compose -f compose-build.yml up --build
+# 2) 如需重新构建（清理并覆盖 build/），执行：
+#    docker compose -f compose-build.yml up --build --force-recreate
+# 3) 完成后可查看本地 build/ 下的多平台二进制：
+#    vistack-linux-amd64, vistack-linux-arm64, vistack-windows-amd64.exe, vistack-darwin-amd64, vistack-darwin-arm64，以及 conf/

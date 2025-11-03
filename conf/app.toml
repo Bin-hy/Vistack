@@ -1,0 +1,27 @@
+[minio]
+endpoint = "localhost:2591"
+access_key = "minioadmin"
+secret_key = "c9jA9ZvNXLwfs6n6fog6EJ0396Q77TbEm6G1XeDQbFG02GYwBsMh5wcTeJFzquD6sYE5saMGsrLnXernC5VaxjNfUuKqZxGRh9wf"
+secure = true
+
+[database]
+host = "localhost"
+port = 5432
+user = "postgres"
+password  = "postgres"
+name = "postgres"
+
+[server]
+port = 8080
+host = "0.0.0.0"
+
+# [auth]
+# jwt_secret = "secret"
+# jwt_expiration = 3600
+
+[redis]
+host = "127.0.0.1"
+port = 6379
+db = 0
+password = ""
+pool_size = 10

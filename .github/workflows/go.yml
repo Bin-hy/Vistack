@@ -1,0 +1,51 @@
+name: Go CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GO_VERSION: '1.25.0'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      # 使用 setup-go 内置缓存，跨平台更稳定
+      - name: Enable Go modules cache
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: |
+            go.sum
+
+      - name: Verify formatting
+        shell: bash
+        run: |
+          CHANGED=$(gofmt -l .)
+          if [ -n "$CHANGED" ]; then
+            echo "Found files with formatting issues:" && echo "$CHANGED"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./... -v

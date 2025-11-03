@@ -1,0 +1,101 @@
+name: Release Backend Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build cross-platform binaries
+    runs-on: ubuntu-latest
+    env:
+      GO_VERSION: '1.25.0'
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+          - goos: linux
+            goarch: arm64
+            ext: ""
+          - goos: windows
+            goarch: amd64
+            ext: ".exe"
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+
+    env:
+      PROJECT_NAME: vistack
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build (${{ matrix.goos }}/${{ matrix.goarch }})
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 0
+        run: |
+          mkdir -p build
+          BIN_NAME=${PROJECT_NAME}-${GOOS}-${GOARCH}${{ matrix.ext }}
+          echo "Building ${BIN_NAME}"
+          go build -trimpath -ldflags="-s -w" -o build/${BIN_NAME} ./main.go
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vistack-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: build/vistack-${{ matrix.goos }}-${{ matrix.goarch }}${{ matrix.ext }}
+
+  release:
+    name: Create GitHub Release and Upload Assets
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: build
+
+      - name: List downloaded files
+        run: ls -R build
+
+      - name: Create GitHub Release and Upload Assets
+        uses: softprops/action-gh-release@v1
+        if: github.ref_type == 'tag'
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            build/vistack-linux-amd64/vistack-linux-amd64
+            build/vistack-linux-arm64/vistack-linux-arm64
+            build/vistack-windows-amd64/vistack-windows-amd64.exe
+            build/vistack-darwin-amd64/vistack-darwin-amd64
+            build/vistack-darwin-arm64/vistack-darwin-arm64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

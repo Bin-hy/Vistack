@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1.6
+
+# 用于交叉编译，输出到容器内 /workspace/build
+# 使用时建议挂载宿主机：
+# docker run --rm -v %CD%:/workspace vistack-builder:latest
+
+FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git ca-certificates
+WORKDIR /workspace
+
+COPY go.mod go.sum ./
+RUN --mount=type=cache,target=/root/.cache/go-build go mod download
+
+COPY . .
+
+ENV CGO_ENABLED=0
+ARG PROJECT_NAME=vistack
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    mkdir -p build && \
+    echo "Building cross-platform binaries for ${PROJECT_NAME}" && \
+    GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o build/${PROJECT_NAME}-linux-amd64 ./main.go && \
+    GOOS=linux   GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o build/${PROJECT_NAME}-linux-arm64 ./main.go && \
+    GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o build/${PROJECT_NAME}-windows-amd64.exe ./main.go && \
+    GOOS=darwin  GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o build/${PROJECT_NAME}-darwin-amd64 ./main.go && \
+    GOOS=darwin  GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o build/${PROJECT_NAME}-darwin-arm64 ./main.go && \
+    cp -r conf build/conf
+
+FROM scratch AS export
+COPY --from=builder /workspace/build /
