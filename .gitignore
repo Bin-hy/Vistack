@@ -1,0 +1,69 @@
+# =========================
+# Go 相关
+# =========================
+# 编译输出目录
+/bin/
+/build/
+/out/
+
+# Go modules 缓存
+/go/pkg/
+/vendor/
+
+# 临时文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# IDE 文件
+*.iml
+.idea/
+.vscode/
+*.vscode/
+
+# 日志文件
+*.log
+
+# =========================
+# Node / Vue3 相关
+# =========================
+# 依赖包
+**/node_modules/
+**/dist/
+/dist-ssr/
+/out/
+*.local
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 环境文件
+.env
+.env.local
+.env.*.local
+
+# IDE 文件
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# =========================
+# 系统文件
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# Docker
+# =========================
+*.dockerignore
+docker-compose.override.yml
