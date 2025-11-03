@@ -50,15 +50,14 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          FILES=$(git ls-files '*.go')
-          if [ -n "$FILES" ]; then
-            CHANGED=$(echo "$FILES" | xargs gofmt -s -l)
-            if [ -n "$CHANGED" ]; then
-              echo "Found files with formatting issues:"
-              echo "$CHANGED"
+          $fmt_output = go fmt ./...
+          if ($fmt_output) {
+              Write-Host "Go files need formatting:"
+              Write-Host $fmt_output
               exit 1
-            fi
-          fi
+          } else {
+              Write-Host "All Go files are properly formatted."
+          }
 
       # ======================
       # 🧠 Vet, Build, Test
