@@ -1,0 +1,33 @@
+{
+      "name": "Vistack",
+      "private": true,
+      "version": "1.0.0",
+      "scripts": {
+            "build:ui": "pnpm --filter @vistack/ui run build",
+            "dev:c": "pnpm --filter web-client run dev",
+            "dev:a": "pnpm --filter web-admin run dev",
+            "dev": "pnpm -r dev",
+            "build": "pnpm -r build"
+      },
+      "keywords": [],
+      "author": "",
+      "license": "ISC",
+      "packageManager": "pnpm@10.18.3",
+      "dependencies": {
+            "pinia": "^3.0.3",
+            "vue": "^3.5.22",
+            "vue-router": "^4.6.3",
+            "axios": "^1.13.1"
+      },
+      "devDependencies": {
+        "@types/node": "^24.6.0",
+        "@vitejs/plugin-vue": "^6.0.1",
+        "@vue/tsconfig": "^0.8.1",
+        "autoprefixer": "^10.4.21",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.13",
+        "typescript": "~5.9.3",
+        "vite": "^7.1.7",
+        "vue-tsc": "^3.1.0"
+    }
+}
