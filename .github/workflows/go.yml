@@ -46,22 +46,19 @@ jobs:
             exit 1
           fi
 
-      - name: Verify formatting (Windows)
+      - name: Verify formatting (Windows Bash)
         if: runner.os == 'Windows'
-        shell: pwsh
+        shell: bash
         run: |
-          $files = git ls-files '*.go'
-          if (-not $files) {
-            Write-Host "No Go files to check."
-            exit 0
-          }
-          $changed = ($files | ForEach-Object { gofmt -s -l $_ }) | Where-Object { $_ -ne "" }
-          if ($changed) {
-            Write-Host "Found files with formatting issues:"
-            $changed
-            Write-Host "To fix locally: gofmt -s -w ."
-            exit 1
-          }
+          FILES=$(git ls-files '*.go')
+          if [ -n "$FILES" ]; then
+            CHANGED=$(echo "$FILES" | xargs gofmt -s -l)
+            if [ -n "$CHANGED" ]; then
+              echo "Found files with formatting issues:"
+              echo "$CHANGED"
+              exit 1
+            fi
+          fi
 
       # ======================
       # 🧠 Vet, Build, Test
