@@ -35,9 +35,17 @@ jobs:
       - name: Verify formatting
         shell: bash
         run: |
-          CHANGED=$(gofmt -l .)
+          # 仅检查被 Git 跟踪的 .go 文件，避免误扫非源码或生成文件；并使用 -s 规范化简化语法
+          FILES=$(git ls-files '*.go')
+          if [ -z "$FILES" ]; then
+            echo "No Go files to check."
+            exit 0
+          fi
+          CHANGED=$(echo "$FILES" | xargs gofmt -s -l)
           if [ -n "$CHANGED" ]; then
-            echo "Found files with formatting issues:" && echo "$CHANGED"
+            echo "Found files with formatting issues:"
+            echo "$CHANGED"
+            echo "To fix locally: gofmt -s -w ."
             exit 1
           fi
 
