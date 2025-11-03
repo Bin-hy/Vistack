@@ -14,6 +14,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       GO_VERSION: '1.25.0'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,20 +23,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      # 使用 setup-go 内置缓存，跨平台更稳定
-      - name: Enable Go modules cache
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
           cache: true
-          cache-dependency-path: |
-            go.sum
+          cache-dependency-path: go.sum
 
-      - name: Verify formatting
+      # ======================
+      # 🧹 Verify formatting (cross-platform)
+      # ======================
+      - name: Verify formatting (Linux/macOS)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          # 仅检查被 Git 跟踪的 .go 文件，避免误扫非源码或生成文件；并使用 -s 规范化简化语法
           FILES=$(git ls-files '*.go')
           if [ -z "$FILES" ]; then
             echo "No Go files to check."
@@ -49,6 +46,26 @@ jobs:
             exit 1
           fi
 
+      - name: Verify formatting (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = git ls-files '*.go'
+          if (-not $files) {
+            Write-Host "No Go files to check."
+            exit 0
+          }
+          $changed = ($files | ForEach-Object { gofmt -s -l $_ }) | Where-Object { $_ -ne "" }
+          if ($changed) {
+            Write-Host "Found files with formatting issues:"
+            $changed
+            Write-Host "To fix locally: gofmt -s -w ."
+            exit 1
+          }
+
+      # ======================
+      # 🧠 Vet, Build, Test
+      # ======================
       - name: Vet
         run: go vet ./...
 
