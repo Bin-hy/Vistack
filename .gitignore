@@ -32,6 +32,7 @@
 # 依赖包
 **/node_modules/
 **/dist/
+**/build/
 /dist-ssr/
 /out/
 *.local
