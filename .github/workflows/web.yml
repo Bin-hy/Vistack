@@ -32,8 +32,7 @@ jobs:
       # 先安装 pnpm，再让 setup-node 使用 pnpm 缓存，避免因未找到 pnpm 导致缓存路径解析失败
       - name: Install pnpm
         uses: pnpm/action-setup@v4
-        with:
-          version: 8
+        # 使用根 package.json 的 packageManager (pnpm@10.x)，避免版本冲突
 
       - name: Setup Node
         uses: actions/setup-node@v4
