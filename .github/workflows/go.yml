@@ -48,7 +48,7 @@ jobs:
 
       - name: Verify formatting (Windows Bash)
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
           $fmt_output = go fmt ./...
           if ($fmt_output) {
