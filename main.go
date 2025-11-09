@@ -1,7 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+
 	"github.com/binhy/vistack/config"
 	"github.com/binhy/vistack/core"
 	"github.com/binhy/vistack/migrations"
@@ -11,8 +13,11 @@ import (
 )
 
 func main() {
+	// 解析 config 路径参数
+	configPath := flag.String("config", "", "path to config file (e.g., go run . --config conf/dev.toml)")
+	flag.Parse()
 	// 加载配置
-	cfg := config.Load()
+	cfg := config.Load(*configPath)
 
 	// 初始化日志
 	core.InitLogger(&cfg)

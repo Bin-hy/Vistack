@@ -35,8 +35,8 @@
 **/build/
 /dist-ssr/
 /out/
-*.local
-
+**/*.local
+**/*.local.*
 # 日志
 npm-debug.log*
 yarn-debug.log*

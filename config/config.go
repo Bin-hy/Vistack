@@ -52,7 +52,7 @@ type AppConfig struct {
 }
 
 // Load 读取配置（conf/app.toml + 环境变量覆盖）
-func Load() AppConfig {
+func Load(configPath string) AppConfig {
 	v := viper.New()
 	v.SetConfigName("app")
 	v.AddConfigPath("conf")
@@ -71,6 +71,16 @@ func Load() AppConfig {
 	v.SetDefault("redis.port", 6379)
 	v.SetDefault("redis.db", 0)
 	v.SetDefault("redis.pool_size", 10)
+
+	// 判断是否指定了自定义路径
+	if configPath != "" {
+		v.SetConfigFile(configPath)
+		fmt.Println("[config] using file:", configPath)
+	} else {
+		v.SetConfigName("app")
+		v.AddConfigPath("conf")
+		fmt.Println("[config] using default conf/app.toml (if exists)")
+	}
 
 	if err := v.ReadInConfig(); err != nil {
 		fmt.Println("[config] no config file found, using defaults & env overrides:", err)

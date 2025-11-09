@@ -2,7 +2,7 @@
 endpoint = "localhost:2591"
 access_key = "minioadmin"
 secret_key = "c9jA9ZvNXLwfs6n6fog6EJ0396Q77TbEm6G1XeDQbFG02GYwBsMh5wcTeJFzquD6sYE5saMGsrLnXernC5VaxjNfUuKqZxGRh9wf"
-secure = true
+secure = false
 
 [database]
 host = "localhost"

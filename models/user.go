@@ -2,7 +2,6 @@ package models
 
 import "gorm.io/gorm"
 
-// User 简易用户模型（示例）
 type User struct {
 	gorm.Model
 	Account      string `gorm:"uniqueIndex;size:120" json:"account"`

@@ -17,7 +17,7 @@ export default ({ mode }: ConfigEnv) => {
     base: './',
     resolve: {
       alias: {
-          '@': resolve("./src") //fileURLToPath(new URL('./src', import.meta.url))
+          '@': resolve("./src")
       }
     },
       define: {

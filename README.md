@@ -80,3 +80,53 @@
 - 实现 **直播 + 点播一体化视频平台**  
 
 ---
+
+# 快速启动
+
+## docker 启动
+
+```bash
+cp .env .env.local
+docker-compose up -d
+```
+
+## server
+
+- `conf/app.toml` 是 `server` 配置文件，
+
+```bash
+go mod tidy
+go run .
+```
+
+## web
+
+- `web/` 是 `web` 前端项目目录，
+
+```bash
+pnpm install
+pnpm run dev
+```
+
+
+# 数据库表结构
+
+| 模块                | 表名                 | 说明                                    |
+| ----------------- | ------------------ | ------------------------------------- |
+| 🧍‍♂️ 用户系统 & 权限管理 | `users`            | 用户基本信息，包含登录凭证、邮箱、状态、关联角色等             |
+|                   | `user_profiles`    | 用户扩展资料（昵称、头像、简介等）                     |
+|                   | `roles`            | 角色表，用于定义系统角色（如管理员、普通用户、审核员等）          |
+|                   | `authorities`      | 权限表，存储资源方法（GET/POST等）与资源URI（REST接口路径） |
+|                   | `role_authority`   | 角色与权限的多对多关联，实现 RBAC（基于角色的访问控制）        |
+|                   | `user_authority`   | 用户级别的特定权限授权/禁用，实现 ABAC/ACL（细粒度权限）     |
+| 🎬 视频管理           | `videos`           | 视频主表，存储视频标题、描述、封面、时长、状态、可见性等          |
+|                   | `video_sources`    | 原始视频上传信息（MinIO存储桶、对象路径、大小、MIME类型等）    |
+|                   | `video_transcodes` | 转码任务与状态，记录转码进度、分辨率、编码格式、MPD清单路径       |
+|                   | `video_segments`   | DASH 分片记录，每个分片对应一个时长和存储地址             |
+| 🏷️ 标签系统          | `tags`             | 标签表，用于管理视频分类、话题等标签                    |
+|                   | `video_tags`       | 视频与标签的关联关系，多对多映射                      |
+| 💬 社交互动           | `video_comments`   | 视频评论表，支持嵌套父子评论结构                      |
+|                   | `video_likes`      | 视频点赞关系表（视频ID + 用户ID 复合主键）             |
+|                   | `video_favorites`  | 视频收藏关系表（视频ID + 用户ID 复合主键）             |
+| 📈 播放统计           | `video_play_logs`  | 视频播放日志，记录播放用户、时间、IP、User-Agent 等信息    |
+| 🧾 系统日志           | `audit_logs`       | 系统操作审计日志，记录用户行为（如删除、发布、权限更改等）         |

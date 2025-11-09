@@ -14,6 +14,9 @@ export default ({ mode }: ConfigEnv) => {
     build: {
       outDir: resolve(ProjectRoot, "build/web-client",)
     },
+    server: {
+      port: 80
+    },
     base: './',
     resolve: {
       alias: {
