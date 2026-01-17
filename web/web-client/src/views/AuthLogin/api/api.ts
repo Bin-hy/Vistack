@@ -1,8 +1,8 @@
 import { post } from '@/lib/http'
 
 export interface LoginPayload {
-  account: string
-  password: string
+	username: string
+	password: string
 }
 
 export interface User {
@@ -13,10 +13,10 @@ export interface User {
 }
 
 export interface LoginResult {
-  token: string
-  user: User
+	token: string
+	user: User
 }
 
 export async function login(payload: LoginPayload): Promise<LoginResult> {
-  return post<LoginResult>('/auth/login', payload)
+	return post<LoginResult>('/auth/login', payload)
 }

@@ -3,7 +3,8 @@
   "compilerOptions": {
     "baseUrl": "",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@ui/*": ["../ui/src/*"]
     }
   },
   "references": [

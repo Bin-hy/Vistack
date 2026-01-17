@@ -16,6 +16,7 @@
 *.dll
 *.so
 *.dylib
+temp
 
 # IDE 文件
 *.iml

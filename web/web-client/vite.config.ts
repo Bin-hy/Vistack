@@ -15,12 +15,13 @@ export default ({ mode }: ConfigEnv) => {
       outDir: resolve(ProjectRoot, "build/web-client",)
     },
     server: {
-      port: 80
+      port: 8335
     },
     base: './',
     resolve: {
       alias: {
-          '@': resolve("./src") //fileURLToPath(new URL('./src', import.meta.url))
+          '@': resolve("./src"),
+          '@ui': resolve(ProjectRoot, "web/ui/src")
       }
     },
       define: {

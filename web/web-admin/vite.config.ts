@@ -15,9 +15,13 @@ export default ({ mode }: ConfigEnv) => {
       outDir: resolve(ProjectRoot, "build/web-admin",)
     },
     base: './',
+    server:{
+      port: 8334
+    },
     resolve: {
       alias: {
-          '@': resolve("./src")
+          '@': resolve("./src"),
+          '@ui': resolve(ProjectRoot, "web/ui/src")
       }
     },
       define: {
