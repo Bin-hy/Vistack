@@ -37,11 +37,11 @@ func GenID() int64 {
 			panic(fmt.Sprintf("snowflake: lazy init failed: %v", err))
 		}
 	}
-	
+
 	if node == nil {
 		panic("snowflake: node is nil (initialization failed)")
 	}
-	
+
 	return node.Generate().Int64()
 }
 
@@ -52,10 +52,10 @@ func GenStringID() string {
 			panic(fmt.Sprintf("snowflake: lazy init failed: %v", err))
 		}
 	}
-	
+
 	if node == nil {
 		panic("snowflake: node is nil (initialization failed)")
 	}
-	
+
 	return node.Generate().String()
 }
