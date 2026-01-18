@@ -16,7 +16,8 @@ export default ({ mode }: ConfigEnv) => {
     },
     base: './',
     server:{
-      port: 8334
+      port: 8334,
+      host: "0.0.0.0"
     },
     resolve: {
       alias: {
