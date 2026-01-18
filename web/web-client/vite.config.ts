@@ -15,7 +15,8 @@ export default ({ mode }: ConfigEnv) => {
       outDir: resolve(ProjectRoot, "build/web-client",)
     },
     server: {
-      port: 8335
+      port: 8335,
+      host: "0.0.0.0"
     },
     base: './',
     resolve: {

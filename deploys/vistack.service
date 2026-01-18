@@ -1,0 +1,22 @@
+[Unit]
+Description=vistack server starter
+After=network.target
+
+[Service]
+# 服务运行用户和工作目录
+User=root
+WorkingDirectory=~/Vistack
+
+# 启动命令
+ExecStart=~/Vistack/vistack
+
+# 自动重启策略
+Restart=on-failure
+RestartSec=5
+
+# log
+StandardOutput=append:/var/log/vistack.log
+StandardError=append:/var/log/vistack-error.log
+
+[Install]
+WantedBy=multi-user.target
