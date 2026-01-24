@@ -47,8 +47,8 @@ func (f *FileApi) AvatarUpload(c *gin.Context) {
 	newFile := mFile.File{
 		Bucket:    global.AppConfig.MinIO.Bucket,
 		ObjectKey: objectName,
-		Status:    "active",
-		RefType:   "avatar", // 暂时标记为 avatar，关联 ID 在用户更新时设置
+		Status:    mFile.FileStatusActive,
+		RefType:   mFile.FileRefTypeAvatar, // 暂时标记为 avatar，关联 ID 在用户更新时设置
 		MimeType:  file.Header.Get("Content-Type"),
 		Size:      file.Size,
 	}
@@ -95,8 +95,8 @@ func (f *FileApi) CoverUpload(c *gin.Context) {
 	newFile := mFile.File{
 		Bucket:    global.AppConfig.MinIO.Bucket,
 		ObjectKey: objectName,
-		Status:    "active",
-		RefType:   "cover", // 暂时标记为 cover，关联 ID 在视频更新时设置，关联视频 ID
+		Status:    mFile.FileStatusActive,
+		RefType:   mFile.FileRefTypeVideoCover, // 暂时标记为 cover，关联 ID 在视频更新时设置，关联视频 ID
 		MimeType:  file.Header.Get("Content-Type"),
 		Size:      file.Size,
 	}

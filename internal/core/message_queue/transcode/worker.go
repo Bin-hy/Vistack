@@ -1,4 +1,4 @@
-package core
+package transcode
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/binhy/vistack/internal/consts"
+	"github.com/binhy/vistack/internal/core"
 	"github.com/binhy/vistack/internal/global"
 	mFile "github.com/binhy/vistack/internal/model/entity/file"
 	mVideo "github.com/binhy/vistack/internal/model/entity/video"
@@ -18,50 +20,67 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+type TranscodeMessage struct {
+	VideoID     int64  `json:"video_id"`
+	TranscodeID int64  `json:"transcode_id"`
+	ObjectKey   string `json:"object_key"`
+	Attempt     int    `json:"attempt"`
+}
+
 // StartTranscodeWorker 启动转码消费者
 func StartTranscodeWorker(ctx context.Context) {
-	StartKafkaConsumer(ctx, "transcode", handleTranscodeMessage)
+	core.StartKafkaConsumer(ctx, string(consts.KafkaTopicTranscode), handleTranscodeMessage)
 }
 
 func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
-	var msg struct {
-		VideoID     int64  `json:"video_id"`
-		TranscodeID int64  `json:"transcode_id"`
-		ObjectKey   string `json:"object_key"`
-	}
+	var msg TranscodeMessage
 
 	if err := json.Unmarshal(value, &msg); err != nil {
 		return fmt.Errorf("unmarshal msg failed: %w", err)
 	}
 
-	Logger.Info("Processing transcode task", zap.Int64("video_id", msg.VideoID))
+	core.Logger.Info("Processing transcode task", zap.Int64("video_id", msg.VideoID))
 
-	// 1. 更新任务状态为 processing
-	if err := DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", "processing").Error; err != nil {
-		Logger.Error("update transcode status failed", zap.Error(err))
+	var tc mVideo.VideoTranscode
+	if err := core.DB.First(&tc, msg.TranscodeID).Error; err == nil {
+		if tc.Status == mVideo.TranscodeStatusCompleted {
+			return nil
+		}
+	}
+	leaseKey := fmt.Sprintf("lease:transcode:%d", msg.TranscodeID)
+	ok, _ := core.Redis.SetNX(ctx, leaseKey, "1", 30*time.Minute).Result()
+	if !ok {
+		return nil
+	}
+	defer core.Redis.Del(ctx, leaseKey)
+	if err := core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", mVideo.TranscodeStatusProcessing).Error; err != nil {
 		return err
 	}
 
 	// 2. 下载原始视频到临时文件
 	bucket := global.AppConfig.MinIO.Bucket
-	tempDir := filepath.Join("temp", "transcode", fmt.Sprintf("%d", msg.VideoID))
+	tempDir := filepath.Join("temp", string(consts.KafkaTopicTranscode), fmt.Sprintf("%d", msg.VideoID))
 	if err := os.MkdirAll(tempDir, 0755); err != nil {
 		return err
 	}
 	defer os.RemoveAll(tempDir)
 
 	inputPath := filepath.Join(tempDir, "input.mp4")
-	if err := Minio.FGetObject(ctx, bucket, msg.ObjectKey, inputPath, minio.GetObjectOptions{}); err != nil {
-		Logger.Error("download input file failed", zap.Error(err))
-		// 标记失败
-		DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", "failed")
-		return err
+	if err := core.Minio.FGetObject(ctx, bucket, msg.ObjectKey, inputPath, minio.GetObjectOptions{}); err != nil {
+		core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", mVideo.TranscodeStatusFailed)
+		attemptsKey := fmt.Sprintf("attempts:transcode:%d", msg.TranscodeID)
+		cnt, _ := core.Redis.Incr(ctx, attemptsKey).Result()
+		core.Redis.Expire(ctx, attemptsKey, 24*time.Hour)
+		if cnt <= 7 {
+			_ = AddTranscodeRetry(ctx, TranscodeRetryMessage{VideoID: msg.VideoID, TranscodeID: msg.TranscodeID, ObjectKey: msg.ObjectKey, Attempt: int(cnt)})
+		}
+		return nil
 	}
 
 	// 2.1 获取视频时长
 	durationSec, err := GetVideoDuration(inputPath)
 	if err != nil {
-		Logger.Warn("get video duration failed", zap.Error(err))
+		core.Logger.Warn("get video duration failed", zap.Error(err))
 		// 不影响主流程，仅记录警告
 	}
 
@@ -75,18 +94,18 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 	}
 	coverPath := filepath.Join(tempDir, "cover.jpg")
 	if err := ExtractVideoFrame(inputPath, coverPath, snapshotTime); err != nil {
-		Logger.Warn("extract cover frame failed", zap.Error(err))
+		core.Logger.Warn("extract cover frame failed", zap.Error(err))
 	} else {
 		info, statErr := os.Stat(coverPath)
 		if statErr != nil {
-			Logger.Warn("stat cover file failed", zap.Error(statErr))
+			core.Logger.Warn("stat cover file failed", zap.Error(statErr))
 		} else {
 			coverObjectKey = fmt.Sprintf("covers/%d.jpg", msg.VideoID)
-			_, putErr := Minio.FPutObject(ctx, bucket, coverObjectKey, coverPath, minio.PutObjectOptions{
+			_, putErr := core.Minio.FPutObject(ctx, bucket, coverObjectKey, coverPath, minio.PutObjectOptions{
 				ContentType: "image/jpeg",
 			})
 			if putErr != nil {
-				Logger.Warn("upload cover file failed", zap.Error(putErr))
+				core.Logger.Warn("upload cover file failed", zap.Error(putErr))
 			} else {
 				coverSize = info.Size()
 			}
@@ -101,9 +120,14 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 
 	qualities, err := TranscodeToDASH(inputPath, outputDir)
 	if err != nil {
-		Logger.Error("transcode failed", zap.Error(err))
-		DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", "failed")
-		return err
+		core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", mVideo.TranscodeStatusFailed)
+		attemptsKey := fmt.Sprintf("attempts:transcode:%d", msg.TranscodeID)
+		cnt, _ := core.Redis.Incr(ctx, attemptsKey).Result()
+		core.Redis.Expire(ctx, attemptsKey, 24*time.Hour)
+		if cnt <= 7 {
+			_ = AddTranscodeRetry(ctx, TranscodeRetryMessage{VideoID: msg.VideoID, TranscodeID: msg.TranscodeID, ObjectKey: msg.ObjectKey, Attempt: int(cnt)})
+		}
+		return nil
 	}
 
 	// 4. 上传结果到 MinIO (dash/{video_id}/)
@@ -124,7 +148,7 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 		return nil
 	})
 	if err != nil {
-		Logger.Error("walk output dir failed", zap.Error(err))
+		core.Logger.Error("walk output dir failed", zap.Error(err))
 		return err
 	}
 
@@ -152,7 +176,7 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 			}
 
 			// Upload
-			_, err := Minio.FPutObject(ctx, bucket, objectName, filePath, minio.PutObjectOptions{
+			_, err := core.Minio.FPutObject(ctx, bucket, objectName, filePath, minio.PutObjectOptions{
 				ContentType: contentType,
 			})
 			if err != nil {
@@ -173,27 +197,31 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 	}
 
 	if err := g.Wait(); err != nil {
-		Logger.Error("upload segments failed", zap.Error(err))
-		DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", "failed")
-		return err
+		core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Update("status", mVideo.TranscodeStatusFailed)
+		attemptsKey := fmt.Sprintf("attempts:transcode:%d", msg.TranscodeID)
+		cnt, _ := core.Redis.Incr(ctx, attemptsKey).Result()
+		core.Redis.Expire(ctx, attemptsKey, 24*time.Hour)
+		if cnt <= 7 {
+			_ = AddTranscodeRetry(ctx, TranscodeRetryMessage{VideoID: msg.VideoID, TranscodeID: msg.TranscodeID, ObjectKey: msg.ObjectKey, Attempt: int(cnt)})
+		}
+		return nil
 	}
 
 	// 5. 更新数据库
-	tx := DB.Begin()
+	tx := core.DB.Begin()
 
 	// 5.1 创建 Manifest File 记录
 	manifestFile := mFile.File{
 		Bucket:    bucket,
 		ObjectKey: manifestObjectKey,
-		Status:    "active",
-		RefType:   "video_manifest",
-		RefID:     msg.VideoID,
+		Status:    mFile.FileStatusActive,
+		RefType:   mFile.FileRefTypeVideoManifest,
 		MimeType:  "application/dash+xml",
 		Size:      manifestSize,
 	}
 	if err := tx.Create(&manifestFile).Error; err != nil {
 		tx.Rollback()
-		Logger.Error("create manifest file record failed", zap.Error(err))
+		core.Logger.Error("create manifest file record failed", zap.Error(err))
 		return err
 	}
 
@@ -204,7 +232,7 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 	resolution := strings.Join(resolutions, ",")
 	codec := "h264,aac"
 	updates := map[string]interface{}{
-		"status":           "completed",
+		"status":           mVideo.TranscodeStatusCompleted,
 		"manifest_file_id": manifestFile.ID,
 		"resolution":       resolution,
 		"codec":            codec,
@@ -212,7 +240,7 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 	}
 	if err := tx.Model(&mVideo.VideoTranscode{}).Where("id = ?", msg.TranscodeID).Updates(updates).Error; err != nil {
 		tx.Rollback()
-		Logger.Error("update transcode record failed", zap.Error(err))
+		core.Logger.Error("update transcode record failed", zap.Error(err))
 		return err
 	}
 
@@ -228,11 +256,11 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 		Protocol: "dash",
 		FileID:   manifestFile.ID,
 		Profiles: string(profilesJSON),
-		Status:   "ready",
+		Status:   mVideo.ManifestStatusReady,
 	}
 	if err := tx.Create(&manifest).Error; err != nil {
 		tx.Rollback()
-		Logger.Error("create manifest record failed", zap.Error(err))
+		core.Logger.Error("create manifest record failed", zap.Error(err))
 		return err
 	}
 
@@ -241,15 +269,14 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 		cf := mFile.File{
 			Bucket:    bucket,
 			ObjectKey: coverObjectKey,
-			Status:    "active",
-			RefType:   "video_cover",
-			RefID:     msg.VideoID,
+			Status:    mFile.FileStatusActive,
+			RefType:   mFile.FileRefTypeVideoCover,
 			MimeType:  "image/jpeg",
 			Size:      coverSize,
 		}
 		if err := tx.Create(&cf).Error; err != nil {
 			tx.Rollback()
-			Logger.Error("create cover file record failed", zap.Error(err))
+			core.Logger.Error("create cover file record failed", zap.Error(err))
 			return err
 		}
 		coverFile = &cf
@@ -257,7 +284,7 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 
 	// 5.4 更新 Video 状态为 published (或者保持 ready 等待审核，这里设为 published)
 	videoUpdates := map[string]interface{}{
-		"status": "published",
+		"status": mVideo.VideoStatusPublished,
 	}
 	if durationSec > 0 {
 		videoUpdates["duration"] = int(durationSec)
@@ -268,11 +295,11 @@ func handleTranscodeMessage(ctx context.Context, key, value []byte) error {
 
 	if err := tx.Model(&mVideo.Video{}).Where("id = ?", msg.VideoID).Updates(videoUpdates).Error; err != nil {
 		tx.Rollback()
-		Logger.Error("update video status failed", zap.Error(err))
+		core.Logger.Error("update video status failed", zap.Error(err))
 		return err
 	}
 
 	tx.Commit()
-	Logger.Info("Transcode completed successfully", zap.Int64("video_id", msg.VideoID))
+	core.Redis.Del(ctx, fmt.Sprintf("attempts:transcode:%d", msg.TranscodeID))
 	return nil
 }

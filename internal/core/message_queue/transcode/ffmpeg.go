@@ -1,4 +1,4 @@
-package core
+package transcode
 
 import (
 	"bytes"

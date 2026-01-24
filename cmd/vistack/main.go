@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/binhy/vistack/internal/core"
+	mq_transcode "github.com/binhy/vistack/internal/core/message_queue/transcode"
+	mq_video "github.com/binhy/vistack/internal/core/message_queue/video"
 	"github.com/binhy/vistack/internal/global"
 	"github.com/binhy/vistack/internal/routers"
 	"github.com/binhy/vistack/migrations"
@@ -51,10 +53,14 @@ func main() {
 	core.InitKafka(&cfg)
 	defer core.CloseKafka()
 
+	// Redis ZSet 重试任务
+	mq_transcode.StartTranscodeRetryDispatcher(context.Background())
+	mq_transcode.StartTranscodeWatchdog(context.Background())
 	// 启动转码 Worker (异步消费 Kafka 消息)
 	// 在实际生产中，Worker 通常作为独立服务部署
 	// 使用 context.Background()，如果需要优雅退出可结合 signal.Notify
-	core.StartTranscodeWorker(context.Background())
+	mq_transcode.StartTranscodeWorker(context.Background())
+	mq_video.StartVideoDeleteWorker(context.Background())
 
 	// 设置 Gin 运行模式
 	switch cfg.Server.Mode {

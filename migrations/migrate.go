@@ -3,12 +3,13 @@ package migrations
 import (
 	"fmt"
 
+	"gorm.io/gorm"
+
 	mFile "github.com/binhy/vistack/internal/model/entity/file"
 	mSocial "github.com/binhy/vistack/internal/model/entity/social"
 	mTag "github.com/binhy/vistack/internal/model/entity/tag"
 	mUser "github.com/binhy/vistack/internal/model/entity/user"
 	mVideo "github.com/binhy/vistack/internal/model/entity/video"
-	"gorm.io/gorm"
 )
 
 // AutoMigrate 执行数据库自动迁移
@@ -35,6 +36,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&mVideo.Video{},
 		&mVideo.VideoSource{},
 		&mVideo.VideoTranscode{},
+
 		&mVideo.VideoManifest{},
 
 		// 标签
@@ -53,6 +55,16 @@ func AutoMigrate(db *gorm.DB) error {
 
 	if err != nil {
 		return err
+	}
+
+	// 显式调整 video_transcodes.resolution 列长度（PostgreSQL）
+	// AutoMigrate 不会自动变更已有列的长度，需手动 ALTER
+	if err := db.Exec(`ALTER TABLE video_transcodes ALTER COLUMN resolution TYPE VARCHAR(100);`).Error; err != nil {
+		// 忽略错误（例如非 PG 或列已是目标类型），不中断迁移
+	}
+
+	// CREATE INDEX idx_transcode_status_update_at ON video_transcodes (status, updated_at, video_id, id)
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_transcode_status_update_at ON video_transcodes (status, updated_at, video_id, id);`).Error; err != nil {
 	}
 
 	return initDefaultRoles(db)

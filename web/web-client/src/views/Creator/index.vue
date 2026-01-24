@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
 import { UiButton, UiCard, UiInput } from '@/components/ui'
 import { put, post as httpPost } from '@/lib/http'
 import CreatorVideoCard from '@/components/creator/VideoCard.vue'
 import { useUserStore } from '@/stores/user'
+import SparkMD5 from 'spark-md5'
 import {
 	initVideoUpload,
-	uploadVideoPart,
+	getUploadPartUrl,
+	listUploadedParts,
 	completeVideoUpload,
 	type CompletePartPayload,
-  getMyVideos,
-  type CreatorVideoItem,
+	getMyVideos,
+	type CreatorVideoItem,
+	deleteVideo,
 } from './api/api'
 
 const userStore = useUserStore()
@@ -27,6 +31,7 @@ const progress = ref(0)
 const statusText = ref('')
 const uploadedVideoId = ref<string | null>(null)
 const errorMessage = ref<string | null>(null)
+const fileHash = ref<string>('')
 
 const chunkSize = 8 * 1024 * 1024
 
@@ -47,8 +52,10 @@ function onFileChange(e: Event) {
 	const files = target.files
 	if (files && files.length > 0) {
 		file.value = files[0] as File
+		fileHash.value = '' // reset hash
 	} else {
 		file.value = null
+		fileHash.value = ''
 	}
 }
 
@@ -71,6 +78,44 @@ function formatSize(size: number): string {
 	return size + ' B'
 }
 
+function calculateHash(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const blobSlice = File.prototype.slice
+		const chunkSize = 2 * 1024 * 1024
+		const chunks = Math.ceil(file.size / chunkSize)
+		const spark = new SparkMD5.ArrayBuffer()
+		const fileReader = new FileReader()
+		let currentChunk = 0
+
+		fileReader.onload = function (e) {
+			spark.append(e.target?.result as ArrayBuffer)
+			currentChunk++
+
+			if (currentChunk < chunks) {
+				// Yield to UI thread
+				setTimeout(loadNext, 0)
+			} else {
+				resolve(spark.end())
+			}
+			// Update progress for hashing (optional, mapped to 0-10%)
+			progress.value = Math.floor((currentChunk / chunks) * 10)
+			statusText.value = `正在计算文件指纹 (${Math.floor((currentChunk / chunks) * 100)}%)`
+		}
+
+		fileReader.onerror = function () {
+			reject('Hash calculation failed')
+		}
+
+		function loadNext() {
+			const start = currentChunk * chunkSize
+			const end = start + chunkSize >= file.size ? file.size : start + chunkSize
+			fileReader.readAsArrayBuffer(blobSlice.call(file, start, end))
+		}
+
+		loadNext()
+	})
+}
+
 async function startUpload() {
 	if (!userStore.isLoggedIn) {
 		alert('请先登录')
@@ -88,49 +133,144 @@ async function startUpload() {
 
 	try {
 		const currentFile = file.value
+
+		// 1. Calculate Hash
+		if (!fileHash.value) {
+			fileHash.value = await calculateHash(currentFile)
+		}
+
+		// 2. Init Upload
+		statusText.value = '正在初始化...'
 		const initResp = await initVideoUpload({
 			filename: currentFile.name,
 			mime_type: currentFile.type,
+			file_hash: fileHash.value,
+		})
+
+		if (initResp.uploaded) {
+			// Instant upload success
+			progress.value = 100
+			statusText.value = '极速秒传成功！正在转码...'
+			uploadedVideoId.value = initResp.video_id
+			uploading.value = false
+			return
+		}
+
+		// 3. Resume Check
+		statusText.value = '正在检查断点...'
+		const uploadedPartsResp = await listUploadedParts({
+			upload_id: initResp.upload_id,
+			object_key: initResp.object_key,
+		})
+
+		// Map uploaded parts: PartNumber -> ETag
+		const uploadedMap = new Map<number, string>()
+		const parts = uploadedPartsResp.parts || []
+		parts.forEach(p => {
+			uploadedMap.set(p.PartNumber, p.ETag)
 		})
 
 		const totalParts = Math.ceil(currentFile.size / chunkSize)
-		const parts: CompletePartPayload[] = []
+		const partsToUpload: number[] = []
 
-		let partNumber = 1
-		let offset = 0
-		while (offset < currentFile.size) {
-			const end = Math.min(offset + chunkSize, currentFile.size)
-			const chunk = currentFile.slice(offset, end)
-			statusText.value = `正在上传分片 ${partNumber}/${totalParts}`
-			const resp = await uploadVideoPart({
-				upload_id: initResp.upload_id,
-				object_key: initResp.object_key,
-				partNumber,
-				chunk,
-			})
-			parts.push({
-				PartNumber: partNumber,
-				ETag: resp.etag,
-			})
-			progress.value = Math.round((partNumber / totalParts) * 100)
-			offset = end
-			partNumber += 1
+		// Identify missing parts
+		for (let i = 1; i <= totalParts; i++) {
+			if (!uploadedMap.has(i)) {
+				partsToUpload.push(i)
+			}
 		}
 
-		statusText.value = '正在合并分片'
+		// 4. Concurrent Upload
+		const completedParts: CompletePartPayload[] = []
+		// Fill already uploaded parts
+		uploadedMap.forEach((etag, partNum) => {
+			completedParts.push({ PartNumber: partNum, ETag: etag })
+		})
+
+		const concurrency = 6 // Increased concurrency for faster upload
+		let completedCount = uploadedMap.size
+		const totalCount = totalParts
+
+		// Worker function
+		const uploadWorker = async () => {
+			while (partsToUpload.length > 0) {
+				const partNumber = partsToUpload.shift()
+				if (!partNumber) break
+
+				const start = (partNumber - 1) * chunkSize
+				const end = Math.min(start + chunkSize, currentFile.size)
+				const chunk = currentFile.slice(start, end)
+
+				try {
+					// Get Presigned URL
+					const signResp = await getUploadPartUrl({
+						upload_id: initResp.upload_id,
+						object_key: initResp.object_key,
+						partNumber,
+					})
+
+					// Direct PUT to MinIO
+					const uploadResp = await fetch(signResp.url, {
+						method: 'PUT',
+						body: chunk,
+					})
+
+					if (!uploadResp.ok) {
+						throw new Error(`Upload part ${partNumber} failed: ${uploadResp.statusText}`)
+					}
+
+					// Get ETag from header
+					const etag = uploadResp.headers.get('ETag') || ''
+					if (!etag) {
+						throw new Error(`No ETag for part ${partNumber}`)
+					}
+
+					completedParts.push({ PartNumber: partNumber, ETag: etag })
+					completedCount++
+
+					// Update progress (10% - 95%)
+					const uploadProgress = Math.floor((completedCount / totalCount) * 85) + 10
+					progress.value = uploadProgress
+					statusText.value = `正在上传分片 ${completedCount}/${totalCount}`
+				} catch (err) {
+					console.error(err)
+					// Put back to queue for retry (simple retry logic)
+					// In production, should have max retry count
+					partsToUpload.push(partNumber)
+					// Wait a bit before retry
+					await new Promise(r => setTimeout(r, 2000))
+				}
+			}
+		}
+
+		// Start workers
+		const workers = Array(concurrency).fill(null).map(() => uploadWorker())
+		await Promise.all(workers)
+
+		// 5. Complete Upload
+		statusText.value = '正在合并分片...'
+		progress.value = 98
+
+		// Sort parts by PartNumber
+		completedParts.sort((a, b) => a.PartNumber - b.PartNumber)
+
 		const completeResp = await completeVideoUpload({
 			upload_id: initResp.upload_id,
 			object_key: initResp.object_key,
 			filename: title.value || currentFile.name,
-			parts,
+			file_hash: fileHash.value,
+			parts: completedParts,
 		})
+
 		uploadedVideoId.value = completeResp.video_id
 		progress.value = 100
 		statusText.value = '上传完成，正在转码'
+
 	} catch (e: any) {
 		const message = e?.message ?? '上传失败，请稍后重试'
 		errorMessage.value = message
 		statusText.value = '上传失败'
+		console.error(e)
 	} finally {
 		uploading.value = false
 	}
@@ -218,6 +358,20 @@ function openEditDialog(video: CreatorVideoItem) {
 	editCoverFileId.value = null
 	editError.value = ''
 	editDialogOpen.value = true
+}
+
+async function handleDeleteVideo(video: CreatorVideoItem) {
+	if (!confirm(`确定要删除视频“${video.title}”吗？此操作不可恢复。`)) {
+		return
+	}
+	try {
+		await deleteVideo(video.id)
+		alert('删除成功')
+		editDialogOpen.value = false
+		loadVideos()
+	} catch (e: any) {
+		alert(e?.message ?? '删除失败')
+	}
 }
 
 function triggerSelectCover() {
@@ -373,7 +527,41 @@ async function saveEdit() {
 	}
 }
 
+function switchTab(tab: 'upload' | 'videos') {
+	if (activeTab.value === tab) return
+	if (activeTab.value === 'upload' && uploading.value) {
+		if (!confirm('视频正在上传中，切换将取消上传，确定要离开吗？')) {
+			return
+		}
+	}
+	activeTab.value = tab
+}
+
+const preventUnload = (e: BeforeUnloadEvent) => {
+	if (uploading.value) {
+		e.preventDefault()
+		e.returnValue = ''
+	}
+}
+
+onUnmounted(() => {
+	window.removeEventListener('beforeunload', preventUnload)
+})
+
+onBeforeRouteLeave((to, from, next) => {
+	if (uploading.value) {
+		if (confirm('视频正在上传中，离开页面将取消上传，确定要离开吗？')) {
+			next()
+		} else {
+			next(false)
+		}
+	} else {
+		next()
+	}
+})
+
 onMounted(() => {
+	window.addEventListener('beforeunload', preventUnload)
 	if (activeTab.value === 'videos') {
 		loadVideos()
 	}
@@ -400,7 +588,7 @@ watch(activeTab, val => {
 								? 'bg-blue-50 text-blue-600 font-medium'
 								: 'text-gray-600 hover:bg-gray-50'
 						"
-						@click="activeTab = 'videos'"
+						@click="switchTab('videos')"
 					>
 						视频管理
 					</button>
@@ -412,7 +600,7 @@ watch(activeTab, val => {
 								? 'bg-pink-50 text-pink-600 font-medium'
 								: 'text-gray-600 hover:bg-gray-50'
 						"
-						@click="activeTab = 'upload'"
+						@click="switchTab('upload')"
 					>
 						视频投稿
 					</button>
@@ -632,23 +820,33 @@ watch(activeTab, val => {
 				<div v-if="editError" class="text-xs text-red-500">
 					{{ editError }}
 				</div>
-				<div class="flex justify-end gap-2 pt-2">
+				<div class="flex justify-between pt-2">
 					<UiButton
-						variant="outline"
+						variant="ghost"
 						size="sm"
-						class="h-9 px-4 text-xs"
-						@click="editDialogOpen = false"
+						class="h-9 px-4 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+						@click="() => handleDeleteVideo(editingVideo!)"
 					>
-						取消
+						删除视频
 					</UiButton>
-					<UiButton
-						size="sm"
-						class="h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white"
-						:disabled="editSaving"
-						@click="saveEdit"
-					>
-						{{ editSaving ? '保存中…' : '保存' }}
-					</UiButton>
+					<div class="flex gap-2">
+						<UiButton
+							variant="outline"
+							size="sm"
+							class="h-9 px-4 text-xs"
+							@click="editDialogOpen = false"
+						>
+							取消
+						</UiButton>
+						<UiButton
+							size="sm"
+							class="h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+							:disabled="editSaving"
+							@click="saveEdit"
+						>
+							{{ editSaving ? '保存中…' : '保存' }}
+						</UiButton>
+					</div>
 				</div>
 			</div>
 		</div>

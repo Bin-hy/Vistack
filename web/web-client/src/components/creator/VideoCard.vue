@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { UiCard } from '@/components/ui'
-import type { CreatorVideoItem } from '@/views/Creator/api/api'
+import { type CreatorVideoItem, VideoStatus } from '@/views/Creator/api/api'
 
 const props = defineProps<{ video: CreatorVideoItem }>()
 
@@ -43,13 +43,13 @@ const durationText = computed(() => formatDuration(props.video.duration as unkno
 const statusText = computed(() => {
 	const val = props.video.status
 	if (!val) return ''
-	if (val === 'processing') return '转码中'
-	if (val === 'published') return '已发布'
-	if (val === 'uploaded') return '已上传'
+	if (val === VideoStatus.Processing) return '转码中'
+	if (val === VideoStatus.Published) return '已发布'
+	if (val === VideoStatus.Uploaded) return '已上传'
 	return val
 })
 
-const isPublished = computed(() => props.video.status === 'published')
+const isPublished = computed(() => props.video.status === VideoStatus.Published)
 
 function handleClick() {
 	if (!isPublished.value) return

@@ -104,11 +104,12 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 	}
 
 	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:  KafkaConfig.Kafka.Brokers,
-		Topic:    topic,
-		GroupID:  KafkaConfig.Kafka.GroupID,
-		MinBytes: 10e3, // 10KB
-		MaxBytes: 10e6, // 10MB
+		Brokers:        KafkaConfig.Kafka.Brokers,
+		Topic:          topic,
+		GroupID:        KafkaConfig.Kafka.GroupID,
+		MinBytes:       10e3, // 10KB
+		MaxBytes:       10e6, // 10MB
+		CommitInterval: 0,
 	})
 
 	if Logger != nil {
@@ -145,7 +146,6 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 					time.Sleep(time.Second)
 					continue
 				}
-
 				if Logger != nil {
 					Logger.Debug("Received kafka message",
 						zap.String("topic", m.Topic),
@@ -162,6 +162,16 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 							zap.ByteString("key", m.Key),
 							zap.Error(err),
 						)
+					}
+				} else {
+					if err := r.CommitMessages(ctx, m); err != nil {
+						if Logger != nil {
+							Logger.Error("Failed to commit kafka message",
+								zap.String("topic", topic),
+								zap.ByteString("key", m.Key),
+								zap.Error(err),
+							)
+						}
 					}
 				}
 			}
