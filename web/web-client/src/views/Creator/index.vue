@@ -548,7 +548,7 @@ onUnmounted(() => {
 	window.removeEventListener('beforeunload', preventUnload)
 })
 
-onBeforeRouteLeave((to, from, next) => {
+onBeforeRouteLeave((_to, _from, next) => {
 	if (uploading.value) {
 		if (confirm('视频正在上传中，离开页面将取消上传，确定要离开吗？')) {
 			next()
