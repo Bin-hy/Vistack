@@ -116,7 +116,7 @@ func (u *UserApi) Register(c *gin.Context) {
 		Username:     req.Username,
 		PasswordHash: hash,
 		RoleID:       defaultRole.ID,
-		Status:       "active",
+		Status:       user.UserStatusActive,
 		Profile: &user.UserProfile{
 			Nickname: &nickname,
 		},
@@ -290,7 +290,6 @@ func (u *UserApi) UpdateProfileDirect(c *gin.Context) {
 			ObjectKey: objectName,
 			Status:    "active",
 			RefType:   "avatar", // 直接关联
-			RefID:     userID,   // 直接关联当前用户
 			MimeType:  fileHeader.Header.Get("Content-Type"),
 			Size:      fileHeader.Size,
 		}

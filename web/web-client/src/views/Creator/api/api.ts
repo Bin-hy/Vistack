@@ -1,7 +1,8 @@
-import { get, post } from '@/lib/http'
+import { del, get, post } from '@/lib/http'
 
 export interface InitUploadPayload {
 	filename: string
+	file_hash: string
 	mime_type?: string
 }
 
@@ -9,10 +10,23 @@ export interface InitUploadResponse {
 	upload_id: string
 	object_key: string
 	bucket: string
+	uploaded: boolean
+	video_id: string
 }
 
-export interface UploadPartResponse {
-	etag: string
+export interface GetUploadPartUrlResponse {
+	url: string
+}
+
+export interface MinioObjectPart {
+	PartNumber: number
+	ETag: string
+	Size: number
+	LastModified: string
+}
+
+export interface ListUploadedPartsResponse {
+	parts: MinioObjectPart[]
 }
 
 export interface CompletePartPayload {
@@ -25,6 +39,22 @@ export interface CompleteUploadResponse {
 	video_id: string
 }
 
+export const VideoStatus = {
+	Uploaded: 'uploaded',
+	Processing: 'processing',
+	Published: 'published',
+	Failed: 'failed',
+	Deleted: 'deleted',
+} as const
+export type VideoStatus = typeof VideoStatus[keyof typeof VideoStatus]
+
+export const VideoVisibility = {
+	Public: 'public',
+	Private: 'private',
+	Unlisted: 'unlisted',
+} as const
+export type VideoVisibility = typeof VideoVisibility[keyof typeof VideoVisibility]
+
 export interface CreatorVideoItem {
 	id: string
 	title: string
@@ -32,8 +62,8 @@ export interface CreatorVideoItem {
 	cover_url?: string | null
 	created_at: string
 	duration?: number
-	status?: string
-	visibility?: string
+	status?: VideoStatus
+	visibility?: VideoVisibility
 }
 
 export interface CreatorVideoListResponse {
@@ -47,22 +77,25 @@ export async function initVideoUpload(payload: InitUploadPayload): Promise<InitU
 	return post<InitUploadResponse>('/videos/upload/init', payload)
 }
 
-export async function uploadVideoPart(params: {
+export async function getUploadPartUrl(params: {
 	upload_id: string
 	object_key: string
 	partNumber: number
-	chunk: Blob
-}): Promise<UploadPartResponse> {
-	const formData = new FormData()
-	formData.append('upload_id', params.upload_id)
-	formData.append('object_key', params.object_key)
-	formData.append('part_number', String(params.partNumber))
-	formData.append('chunk', params.chunk)
+}): Promise<GetUploadPartUrlResponse> {
+	return get<GetUploadPartUrlResponse>('/videos/upload/sign', {
+		upload_id: params.upload_id,
+		object_key: params.object_key,
+		partNumber: params.partNumber,
+	})
+}
 
-	return post<UploadPartResponse>('/videos/upload/part', formData, {
-		headers: {
-			'Content-Type': 'multipart/form-data',
-		},
+export async function listUploadedParts(params: {
+	upload_id: string
+	object_key: string
+}): Promise<ListUploadedPartsResponse> {
+	return get<ListUploadedPartsResponse>('/videos/upload/parts', {
+		upload_id: params.upload_id,
+		object_key: params.object_key,
 	})
 }
 
@@ -70,14 +103,10 @@ export async function completeVideoUpload(params: {
 	upload_id: string
 	object_key: string
 	filename: string
+	file_hash: string
 	parts: CompletePartPayload[]
 }): Promise<CompleteUploadResponse> {
-	return post<CompleteUploadResponse>('/videos/upload/complete', {
-		upload_id: params.upload_id,
-		object_key: params.object_key,
-		filename: params.filename,
-		parts: params.parts,
-	})
+	return post<CompleteUploadResponse>('/videos/upload/complete', params)
 }
 
 export async function getMyVideos(params: {
@@ -86,4 +115,8 @@ export async function getMyVideos(params: {
 	keyword?: string
 }): Promise<CreatorVideoListResponse> {
 	return get<CreatorVideoListResponse>('/videos/plateform/list', params)
+}
+
+export async function deleteVideo(videoId: string): Promise<void> {
+	return del<void>(`/videos/${videoId}`)
 }

@@ -13,7 +13,8 @@ func (v *VideoRouter) InitVideoPrivatesRouter(Router *gin.RouterGroup) {
 	{
 		// 视频上传流程
 		videoRouter.POST("/upload/init", videoApi.InitVideoUpload)
-		videoRouter.POST("/upload/part", videoApi.UploadVideoPart)
+		videoRouter.GET("/upload/sign", videoApi.GetUploadPartURL)
+		videoRouter.GET("/upload/parts", videoApi.ListUploadedParts)
 		videoRouter.POST("/upload/complete", videoApi.CompleteVideoUpload)
 
 		// 视频管理

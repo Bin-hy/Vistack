@@ -5,11 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/binhy/vistack/internal/consts"
 	"github.com/binhy/vistack/internal/core"
+	"github.com/binhy/vistack/internal/core/message_queue/transcode"
+	mq_video "github.com/binhy/vistack/internal/core/message_queue/video"
 	"github.com/binhy/vistack/internal/global"
 	mFile "github.com/binhy/vistack/internal/model/entity/file"
 	mVideo "github.com/binhy/vistack/internal/model/entity/video"
@@ -20,7 +24,7 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/zap"
-	"gorm.io/gorm/clause"
+	"gorm.io/gorm"
 )
 
 // 视频路由
@@ -54,13 +58,19 @@ type VideoInfoResponse struct {
 
 // VideoInitRequest 初始化分片上传请求
 type VideoInitRequest struct {
-	Filename string `json:"filename" binding:"required"`
-	MimeType string `json:"mime_type"`
+	Filename  string `json:"filename" binding:"required"`
+	MimeType  string `json:"mime_type"`
+	FileHash  string `json:"file_hash" binding:"required"` // md5 hash值
+	FileSize  int64  `json:"file_size"`
+	ChunkSize int64  `json:"chunk_size" bingding:"required"` // 分块大小
 }
+
 type VideoInitResponse struct {
 	UploadID  string `json:"upload_id"`
 	ObjectKey string `json:"object_key"`
 	Bucket    string `json:"bucket"`
+	Uploaded  bool   `json:"uploaded"`           // 是否秒传成功
+	VideoID   string `json:"video_id,omitempty"` // 秒传成功时的 VideoID
 }
 
 // InitVideoUpload 初始化分片上传
@@ -75,6 +85,93 @@ func (v *VideoApi) InitVideoUpload(c *gin.Context) {
 
 	if req.MimeType == "" {
 		req.MimeType = "application/octet-stream"
+	}
+
+	userID := auth.GetUserID(c)
+	ctx := c.Request.Context()
+
+	// 0. 全局秒传检查 (Global Dedup)
+	// 检查数据库中是否存在相同 Hash 且状态为 active 的文件
+	var existingFile mFile.File
+	if err := core.DB.Where("hash = ? AND status = ?", req.FileHash, mFile.FileStatusActive).First(&existingFile).Error; err == nil {
+		// 命中秒传！复用该物理文件，增加引用计数
+		tx := core.DB.Begin()
+
+		// 0.1 增加引用计数
+		if err := tx.Model(&existingFile).UpdateColumn("ref_count", gorm.Expr("ref_count + ?", 1)).Error; err != nil {
+			tx.Rollback()
+			core.Logger.Error("dedup update ref_count failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		// 0.2 创建 UserVideo
+		video := mVideo.Video{
+			UserID: userID,
+			Title:  req.Filename,
+			Status: mVideo.VideoStatusProcessing, // 秒传成功，进入转码流程
+		}
+
+		if err := tx.Create(&video).Error; err != nil {
+			tx.Rollback()
+			core.Logger.Error("dedup create video failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		// 0.3 创建 VideoSource 关联到同一个 FileID
+		source := mVideo.VideoSource{
+			VideoID:    video.ID,
+			FileID:     existingFile.ID, // 复用 FileID
+			UploadedAt: time.Now(),
+		}
+		if err := tx.Create(&source).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		// 0.4 创建转码任务 (每个用户视频独立的转码任务)
+		transcodeTask := mVideo.VideoTranscode{
+			VideoID: video.ID,
+			Status:  mVideo.TranscodeStatusPending,
+		}
+		if err := tx.Create(&transcodeTask).Error; err != nil {
+			tx.Rollback()
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		tx.Commit()
+
+		// 0.5 发送 Kafka 消息
+		msg := transcode.TranscodeMessage{
+			VideoID:     video.ID,
+			TranscodeID: transcodeTask.ID,
+			ObjectKey:   existingFile.ObjectKey,
+		}
+		msgBytes, _ := json.Marshal(msg)
+		_ = core.SendKafkaMessage(context.Background(), "transcode", strconv.FormatInt(video.ID, 10), msgBytes)
+
+		c.JSON(http.StatusOK, VideoInitResponse{
+			Uploaded: true,
+			VideoID:  strconv.FormatInt(video.ID, 10),
+		})
+		return
+	}
+
+	// 1. 续传检查 (Resume Check)
+	// Check Redis for existing upload session
+	// Key: upload_session:<user_id>:<file_hash>
+	sessionKey := fmt.Sprintf("upload_session:%d:%s", userID, req.FileHash)
+
+	if val, err := core.Redis.Get(ctx, sessionKey).Result(); err == nil && val != "" {
+		var cachedResp VideoInitResponse
+		if err := json.Unmarshal([]byte(val), &cachedResp); err == nil {
+			// Verify if the upload is still valid in MinIO (optional, but good practice)
+			c.JSON(http.StatusOK, cachedResp)
+			return
+		}
 	}
 
 	// 2. 生成 ObjectKey
@@ -93,68 +190,107 @@ func (v *VideoApi) InitVideoUpload(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, VideoInitResponse{
+	resp := VideoInitResponse{
 		UploadID:  uploadID,
 		ObjectKey: objectKey,
 		Bucket:    bucket,
-	})
+		Uploaded:  false,
+	}
+
+	// Cache the session in Redis for 24 hours
+	if bytes, err := json.Marshal(resp); err == nil {
+		core.Redis.Set(ctx, sessionKey, string(bytes), 24*time.Hour)
+	}
+
+	c.JSON(http.StatusOK, resp)
 }
 
-// UploadVideoPartRequest 上传分片请求
-type UploadVideoPartRequest struct {
-	UploadID   string `json:"upload_id" binding:"required"`
-	ObjectKey  string `json:"object_key" binding:"required"`
-	PartNumber int    `json:"part_number" binding:"required"`
+// GetUploadPartURLRequest 获取分片上传链接请求
+type GetUploadPartURLRequest struct {
+	UploadID   string `json:"upload_id" form:"upload_id" binding:"required"`
+	ObjectKey  string `json:"object_key" form:"object_key" binding:"required"`
+	PartNumber int    `json:"partNumber" form:"partNumber" binding:"required"`
 }
 
-type UploadVideoPartResponse struct {
-	ETag string `json:"etag"`
+type GetUploadPartURLResponse struct {
+	URL string `json:"url"`
 }
 
-// UploadVideoPart 上传分片
-func (v *VideoApi) UploadVideoPart(c *gin.Context) {
+// GetUploadPartURL 获取分片上传 Presigned URL
+func (v *VideoApi) GetUploadPartURL(c *gin.Context) {
 	// 0. 获取参数
-	uploadID := c.PostForm("upload_id")
-	objectKey := c.PostForm("object_key")
-	partNumberStr := c.PostForm("part_number")
-
-	if uploadID == "" || objectKey == "" || partNumberStr == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing parameters"})
+	var req GetUploadPartURLRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	partNumber, err := strconv.Atoi(partNumberStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid part_number"})
-		return
-	}
-
-	// 1. 获取上传的文件分片
-	file, err := c.FormFile("chunk")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Get chunk failed"})
-		return
-	}
-
-	src, err := file.Open()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Open chunk failed"})
-		return
-	}
-	defer src.Close()
 
 	bucket := global.AppConfig.MinIO.Bucket
 
-	// 2. 上传分片到 MinIO
-	part, err := core.MinioCore.PutObjectPart(c.Request.Context(), bucket, objectKey, uploadID, partNumber, src, file.Size, minio.PutObjectPartOptions{})
+	// 1. 生成 Presigned URL
+	// 过期时间设置为 1 小时
+	expires := time.Hour
+
+	// 注意：MinIO Go SDK 的 PresignedPutObject 通常用于普通 PUT，
+	// 对于 Multipart Part Upload，需要特殊处理 query params
+	// 但是 MinIO SDK 的 PresignedPutObject 也可以带参数。
+	// 更底层的方法是 core.Presign
+
+	// 使用 minio.Core 的 Presign 方法更灵活，或者使用 Client.PresignedUrl
+	// 构造参数
+	reqParams := make(url.Values)
+	reqParams.Set("uploadId", req.UploadID)
+	reqParams.Set("partNumber", strconv.Itoa(req.PartNumber))
+
+	// 生成 URL
+	u, err := core.MinioCore.Presign(c.Request.Context(), "PUT", bucket, req.ObjectKey, expires, reqParams)
 	if err != nil {
-		core.Logger.Error("upload part failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Upload part failed"})
+		core.Logger.Error("get presigned url failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Get upload url failed"})
 		return
 	}
 
-	c.JSON(http.StatusOK, UploadVideoPartResponse{
-		ETag: part.ETag,
+	c.JSON(http.StatusOK, GetUploadPartURLResponse{
+		URL: u.String(),
+	})
+}
+
+// ListUploadedPartsRequest 列举已上传分片请求
+type ListUploadedPartsRequest struct {
+	UploadID  string `json:"upload_id" form:"upload_id" binding:"required"`
+	ObjectKey string `json:"object_key" form:"object_key" binding:"required"`
+}
+
+type ListUploadedPartsResponse struct {
+	Parts []minio.ObjectPart `json:"parts"`
+}
+
+// ListUploadedParts 列举已上传分片
+func (v *VideoApi) ListUploadedParts(c *gin.Context) {
+	var req ListUploadedPartsRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	bucket := global.AppConfig.MinIO.Bucket
+
+	// 调用 MinIO Core List Object Parts
+	// maxParts set to 10000 (max limit for S3)
+	result, err := core.MinioCore.ListObjectParts(c.Request.Context(), bucket, req.ObjectKey, req.UploadID, 0, 10000)
+	if err != nil {
+		core.Logger.Error("list object parts failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "List parts failed"})
+		return
+	}
+
+	parts := result.ObjectParts
+	if parts == nil {
+		parts = []minio.ObjectPart{}
+	}
+
+	c.JSON(http.StatusOK, ListUploadedPartsResponse{
+		Parts: parts,
 	})
 }
 
@@ -162,13 +298,8 @@ type CompleteVideoUpload struct {
 	UploadID  string               `json:"upload_id" binding:"required"`
 	ObjectKey string               `json:"object_key" binding:"required"`
 	Filename  string               `json:"filename" binding:"required"`
+	FileHash  string               `json:"file_hash"`
 	Parts     []minio.CompletePart `json:"parts" binding:"required"` // 需要前端传回所有分片的 ETag
-}
-
-type TranscodeMessage struct {
-	VideoID     int64  `json:"video_id"`
-	TranscodeID int64  `json:"transcode_id"`
-	ObjectKey   string `json:"object_key"`
 }
 
 type CompleteVideoUploadResponse struct {
@@ -205,7 +336,7 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 	video := mVideo.Video{
 		UserID: userID,
 		Title:  req.Filename,
-		Status: "processing", // 标记为处理中
+		Status: mVideo.VideoStatusProcessing, // 标记为处理中
 	}
 	if err := tx.Create(&video).Error; err != nil {
 		tx.Rollback()
@@ -218,10 +349,11 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 	rawFile := mFile.File{
 		Bucket:    bucket,
 		ObjectKey: req.ObjectKey,
-		Status:    "active",
-		RefType:   "video_source",
-		RefID:     video.ID,
+		Status:    mFile.FileStatusActive,
+		RefType:   mFile.FileRefTypeVideoSource,
 		MimeType:  "video/mp4", // 暂时假定
+		Hash:      req.FileHash,
+		RefCount:  1, // 初始引用计数为 1
 	}
 	if err := tx.Create(&rawFile).Error; err != nil {
 		tx.Rollback()
@@ -244,11 +376,11 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 	}
 
 	// 2.4 创建 VideoTranscode 任务
-	transcode := mVideo.VideoTranscode{
+	transcodeTask := mVideo.VideoTranscode{
 		VideoID: video.ID,
-		Status:  "pending",
+		Status:  mVideo.TranscodeStatusPending,
 	}
-	if err := tx.Create(&transcode).Error; err != nil {
+	if err := tx.Create(&transcodeTask).Error; err != nil {
 		tx.Rollback()
 		core.Logger.Error("create transcode task failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
@@ -259,17 +391,23 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 
 	// 3. 发送 Kafka 消息
 	// 消息格式: {"video_id": 1, "transcode_id": 1, "object_key": "raw/xxx.mp4"}
-	msg := TranscodeMessage{
+	msg := transcode.TranscodeMessage{
 		VideoID:     video.ID,
-		TranscodeID: transcode.ID,
+		TranscodeID: transcodeTask.ID,
 		ObjectKey:   req.ObjectKey,
 	}
 	msgBytes, _ := json.Marshal(msg)
 
 	// 使用 "transcode" 作为 Topic
-	if err := core.SendKafkaMessage(context.Background(), "transcode", strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
+	if err := core.SendKafkaMessage(context.Background(), string(consts.KafkaTopicTranscode), strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
 		// 发送失败不回滚数据库，可以由定时任务补救
 		core.Logger.Error("send kafka message failed", zap.Error(err))
+	}
+
+	// Clear upload session
+	if req.FileHash != "" {
+		sessionKey := fmt.Sprintf("upload_session:%d:%s", userID, req.FileHash)
+		_ = core.Redis.Del(context.Background(), sessionKey).Err()
 	}
 
 	c.JSON(http.StatusOK, CompleteVideoUploadResponse{
@@ -296,74 +434,83 @@ func (v *VideoApi) DeleteVideo(c *gin.Context) {
 	// 1. 查询视频
 	var video mVideo.Video
 	if err := core.DB.First(&video, id).Error; err != nil {
-		// 视频不存在，返回成功
+		// 视频不存在，返回成功 (幂等)
 		c.JSON(http.StatusOK, gin.H{"msg": "success"})
 		return
 	}
 
 	// 检查权限
 	if video.UserID != userID {
-		// 这里简化处理，实际可能有管理员权限
 		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
 		return
 	}
 
-	// 2. 删除 MinIO 文件 (Dash 目录, Raw 文件, Cover)
-	bucket := global.AppConfig.MinIO.Bucket
+	// 2. 软删除逻辑 (Soft Delete + RefCount)
+	tx := core.DB.Begin()
 
-	// 2.1 删除 Dash 目录 (dash/{video_id}/)
-	dashPrefix := fmt.Sprintf("dash/%d/", video.ID)
-	deleteObjects(bucket, dashPrefix)
-
-	// 2.2 删除 Raw 文件 (通过 Source 关联)
-	var sources []mVideo.VideoSource
-	core.DB.Preload("File").Where("video_id = ?", video.ID).Find(&sources)
-	for _, s := range sources {
-		if s.File != nil {
-			deleteObject(bucket, s.File.ObjectKey)
-		}
-	}
-
-	// 2.3 删除封面
-	if video.CoverFileID != nil {
-		var cover mFile.File
-		if err := core.DB.First(&cover, *video.CoverFileID).Error; err == nil {
-			deleteObject(bucket, cover.ObjectKey)
-		}
-	}
-
-	// 3. 删除数据库记录 (级联删除)
-	if err := core.DB.Select(clause.Associations).Delete(&video).Error; err != nil {
-		core.Logger.Error("delete video record failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Delete failed"})
+	// 2.1 标记 UserVideo 为 deleted
+	// 注意：这里不直接删除记录，而是更新状态，以便后续异步清理转码产物
+	if err := tx.Model(&video).Update("status", mVideo.VideoStatusDeleted).Error; err != nil {
+		tx.Rollback()
+		core.Logger.Error("update video status failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"msg": "success"})
-}
-
-func deleteObject(bucket, key string) {
-	if err := core.Minio.RemoveObject(context.Background(), bucket, key, minio.RemoveObjectOptions{}); err != nil {
-		core.Logger.Error("remove object failed", zap.String("key", key), zap.Error(err))
+	// 2.2 处理引用计数
+	var sources []mVideo.VideoSource
+	if err := tx.Where("video_id = ?", video.ID).Find(&sources).Error; err != nil {
+		tx.Rollback()
+		core.Logger.Error("find sources failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+		return
 	}
-}
 
-func deleteObjects(bucket, prefix string) {
-	objectsCh := make(chan minio.ObjectInfo)
-	go func() {
-		defer close(objectsCh)
-		for object := range core.Minio.ListObjects(context.Background(), bucket, minio.ListObjectsOptions{Prefix: prefix, Recursive: true}) {
-			if object.Err != nil {
-				continue
-			}
-			objectsCh <- object
+	for _, s := range sources {
+		// 减少 File 引用计数
+		// UPDATE files SET ref_count = ref_count - 1 WHERE id = ?
+		if err := tx.Model(&mFile.File{}).Where("id = ?", s.FileID).
+			UpdateColumn("ref_count", gorm.Expr("ref_count - ?", 1)).Error; err != nil {
+			tx.Rollback()
+			core.Logger.Error("decrease ref_count failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
 		}
-	}()
 
-	opts := minio.RemoveObjectsOptions{GovernanceBypass: true}
-	for err := range core.Minio.RemoveObjects(context.Background(), bucket, objectsCh, opts) {
-		core.Logger.Error("remove objects failed", zap.Error(err.Err))
+		// 检查引用计数是否归零
+		var file mFile.File
+		if err := tx.First(&file, s.FileID).Error; err != nil {
+			tx.Rollback()
+			core.Logger.Error("find file failed", zap.Error(err))
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+			return
+		}
+
+		if file.RefCount <= 0 {
+			// 标记物理文件为待删除 (deleting)
+			// GC 任务会扫描此状态并执行物理删除
+			if err := tx.Model(&file).Update("status", mFile.FileStatusDeleting).Error; err != nil {
+				tx.Rollback()
+				core.Logger.Error("mark file deleting failed", zap.Error(err))
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
+				return
+			}
+		}
 	}
+
+	tx.Commit()
+
+	// 3. 触发异步清理任务
+	// 这里可以发送一个 Kafka 消息通知 "VideoDeleted"，让消费者去清理 dash/{video_id}
+	msg := mq_video.VideoDeleteMessage{
+		VideoID: video.ID,
+	}
+	msgBytes, _ := json.Marshal(msg)
+	if err := core.SendKafkaMessage(context.Background(), string(consts.KafkaTopicDeleteFile), strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
+		core.Logger.Error("send kafka message failed", zap.Error(err))
+	}
+
+	c.JSON(http.StatusOK, gin.H{"msg": "success"})
 }
 
 // GetVideoInfo 获取视频信息
@@ -440,8 +587,8 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 		Description: video.Description,
 		CoverURL:    coverURL,
 		Duration:    video.Duration,
-		Status:      video.Status,
-		Visibility:  video.Visibility,
+		Status:      string(video.Status),
+		Visibility:  string(video.Visibility),
 		CreatedAt:   video.CreatedAt,
 		UpdatedAt:   video.UpdatedAt,
 		User:        author,
@@ -497,7 +644,12 @@ func (v *VideoApi) GetSelfVideoPage(c *gin.Context) {
 	var videos []mVideo.Video
 	var total int64
 
-	db := core.DB.Model(&mVideo.Video{}).Where("user_id = ?", userID)
+	// 这里用 in 禁止用 != , 因为无法使用索引优化
+	db := core.DB.Model(&mVideo.Video{}).Where("user_id = ? and status IN ?", userID, []mVideo.VideoStatus{
+		mVideo.VideoStatusPublished,
+		mVideo.VideoStatusUploaded,
+		mVideo.VideoStatusProcessing,
+	})
 
 	if req.Keyword != "" {
 		db = db.Where("title LIKE ?", "%"+req.Keyword+"%")
@@ -530,8 +682,8 @@ func (v *VideoApi) GetSelfVideoPage(c *gin.Context) {
 			Description: video.Description,
 			CoverURL:    coverURL,
 			Duration:    video.Duration,
-			Status:      video.Status,
-			Visibility:  video.Visibility,
+			Status:      string(video.Status),
+			Visibility:  string(video.Visibility),
 			CreatedAt:   video.CreatedAt,
 			UpdatedAt:   video.UpdatedAt,
 		})
@@ -597,7 +749,7 @@ func (v *VideoApi) PutVideoInfo(c *gin.Context) {
 		video.CoverFileID = req.CoverFileID
 	}
 	if req.Visibility != nil {
-		video.Visibility = *req.Visibility
+		video.Visibility = mVideo.VideoVisibility(*req.Visibility)
 	}
 
 	if err := core.DB.Save(&video).Error; err != nil {
@@ -630,7 +782,7 @@ func (v *VideoApi) GetVideoMdp(c *gin.Context) {
 
 	// 1. 查询 VideoManifest 找到 manifest.mpd
 	var manifest mVideo.VideoManifest
-	if err := core.DB.Preload("File").Where("video_id = ? AND protocol = ? AND status = ?", videoID, "dash", "ready").First(&manifest).Error; err != nil {
+	if err := core.DB.Preload("File").Where("video_id = ? AND protocol = ? AND status = ?", videoID, "dash", mVideo.ManifestStatusReady).First(&manifest).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Manifest not found"})
 		return
 	}
