@@ -14,7 +14,7 @@ export default ({ mode }: ConfigEnv) => {
     build: {
       outDir: resolve(ProjectRoot, "build/web-admin",)
     },
-    base: './',
+    base: '/',
     server:{
       port: 8334,
       host: "0.0.0.0"
