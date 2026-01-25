@@ -24,7 +24,7 @@ type VideoManifest struct {
 	Profiles  string         `gorm:"type:jsonb;column:profiles" json:"profiles,omitempty"`
 	Status    ManifestStatus `gorm:"size:20;default:ready;column:status" json:"status"`
 	CreatedAt time.Time      `gorm:"column:created_at" json:"created_at"`
-	UpdatedAt time.Time `gorm:"column:updated_at" json:"updated_at"`
+	UpdatedAt time.Time      `gorm:"column:updated_at" json:"updated_at"`
 
 	Video *Video     `gorm:"foreignKey:VideoID;constraint:false" json:"video,omitempty"`
 	File  *file.File `gorm:"foreignKey:FileID;constraint:false" json:"file,omitempty"`
