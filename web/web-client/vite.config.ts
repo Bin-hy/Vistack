@@ -18,7 +18,7 @@ export default ({ mode }: ConfigEnv) => {
       port: 8335,
       host: "0.0.0.0"
     },
-    base: './',
+    base: '/',
     resolve: {
       alias: {
           '@': resolve("./src"),
