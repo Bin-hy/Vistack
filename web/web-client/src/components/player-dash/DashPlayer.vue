@@ -349,23 +349,25 @@ watch(
 			</div>
 			<div v-if="isReady" class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
 		</div>
-		<div class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3">
-			<div class="flex items-center gap-3">
+		<div class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 md:p-3">
+			<div class="flex items-center gap-2 md:gap-3">
 				<PlayButton :playing="isPlaying" @toggle="togglePlay" />
 				<div class="flex flex-1 flex-col gap-1">
 					<ProgressBar :current-time="currentTime" :duration="duration" @update:time="seek" />
-					<div class="flex items-center justify-between text-xs text-white/80">
+					<div class="flex items-center justify-between text-xs text-white/80 scale-90 origin-left md:scale-100">
 						<span>{{ formattedCurrentTime }} / {{ formattedDuration }}</span>
 					</div>
 				</div>
-				<VolumeControl :volume="volume" :muted="isMuted" @update:volume="changeVolume" @toggle-mute="toggleMute" />
+				<div class="hidden sm:block">
+					<VolumeControl :volume="volume" :muted="isMuted" @update:volume="changeVolume" @toggle-mute="toggleMute" />
+				</div>
 				<div class="relative flex items-center text-xs text-white">
 					<button
 						type="button"
 						class="flex items-center rounded bg-white/10 px-2 py-0.5 hover:bg-white/20"
 						@click="toggleRateMenu"
 					>
-						<span class="mr-1">倍速</span>
+						<span class="mr-1 hidden sm:inline">倍速</span>
 						<span>{{ displayPlaybackRate }}x</span>
 					</button>
 					<div
@@ -387,24 +389,24 @@ watch(
 				<QualitySelector :options="qualityOptions" :value="selectedQuality" @change="setQuality" />
 				<FullscreenBtn :fullscreen="isFullscreen" @toggle="toggleFullscreen" />
 			</div>
-			<div class="mt-2 flex items-center gap-2">
+			<div class="mt-1 md:mt-2 flex items-center gap-2">
 				<button
-					class="flex items-center rounded-full border px-3 py-1 text-xs"
+					class="flex items-center rounded-full border px-2 md:px-3 py-0.5 md:py-1 text-xs whitespace-nowrap"
 					:class="danmakuEnabled ? 'border-[#00A1D6] bg-[#00A1D6]/10 text-[#00A1D6]' : 'border-white/30 bg-black/40 text-white/70'"
 					type="button"
 					@click="danmakuEnabled = !danmakuEnabled"
 				>
-					<span class="mr-1">弹幕</span>
-					<span>{{ danmakuEnabled ? '开启' : '关闭' }}</span>
+					<span class="mr-1 hidden sm:inline">弹幕</span>
+					<span>{{ danmakuEnabled ? '开' : '关' }}</span>
 				</button>
 				<input
 					v-model="danmakuText"
-					class="h-8 flex-1 rounded border border-white/20 bg-black/40 px-3 text-xs text-white outline-none focus:border-[#00A1D6]"
-					placeholder="发个友善的弹幕见证当下"
+					class="h-7 md:h-8 flex-1 rounded border border-white/20 bg-black/40 px-2 md:px-3 text-xs text-white outline-none focus:border-[#00A1D6]"
+					placeholder="发个弹幕..."
 					@keyup.enter="handleSendDanmaku"
 				/>
 				<button
-					class="h-8 rounded bg-[#00A1D6] px-4 text-xs font-medium text-white hover:bg-[#0090c0]"
+					class="h-7 md:h-8 rounded bg-[#00A1D6] px-3 md:px-4 text-xs font-medium text-white hover:bg-[#0090c0] whitespace-nowrap"
 					type="button"
 					@click="handleSendDanmaku"
 				>

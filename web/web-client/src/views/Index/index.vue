@@ -31,7 +31,7 @@ onMounted(() => {
                 <span class="text-pink-500">🔥</span> 热门推荐
             </h1>
             
-            <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div v-if="loading" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
                  <div v-for="i in 10" :key="i" class="space-y-2">
                     <div class="aspect-video bg-gray-200 rounded-lg animate-pulse"></div>
                     <div class="h-4 bg-gray-200 rounded w-3/4 animate-pulse"></div>
@@ -39,7 +39,7 @@ onMounted(() => {
                  </div>
             </div>
             
-            <div v-else-if="videos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            <div v-else-if="videos.length > 0" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 sm:gap-6">
                 <VideoCard 
                     v-for="item in videos" 
                     :key="item.id" 
