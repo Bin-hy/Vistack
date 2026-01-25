@@ -122,9 +122,10 @@ onBeforeUnmount(() => {
 
 <template>
 	<BiliLayout>
-		<div class="flex items-start gap-6">
-			<div class="flex-1 space-y-4">
-				<div class="rounded-lg bg-white shadow-sm p-3">
+		<div class="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
+			<!-- Main Content: Player + Info -->
+			<div class="w-full lg:flex-1 space-y-4">
+				<div class="rounded-lg bg-white shadow-sm p-0 md:p-3 overflow-hidden">
 					<DashPlayer
 						v-if="manifestUrl && segmentsBaseUrl && segmentsCredentials"
 						:src="manifestUrl"
@@ -168,48 +169,54 @@ onBeforeUnmount(() => {
 							<span>转发</span>
 						</button>
 					</div>
-					<p v-if="videoInfo?.description" class="mt-2 text-sm text-gray-700 whitespace-pre-line">
-						{{ videoInfo.description }}
-					</p>
+					<div class="border-t border-gray-100 pt-3 text-sm text-gray-700 leading-relaxed">
+						{{ videoInfo?.description || '暂无简介' }}
+					</div>
 				</div>
 			</div>
-			<div class="w-72 space-y-4">
+
+			<!-- Sidebar: Author + Rec (TODO) -->
+			<div class="w-full lg:w-80 space-y-4">
 				<div class="rounded-lg bg-white shadow-sm p-4">
 					<div class="flex items-center gap-3">
-						<div class="h-12 w-12 rounded-full bg-gray-200 overflow-hidden flex items-center justify-center text-xs text-gray-500">
-							<img
-								v-if="videoInfo?.user?.avatar_url"
-								:src="videoInfo.user.avatar_url"
-								alt="avatar"
-								class="h-full w-full object-cover"
-							/>
-							<span v-else>UP</span>
-						</div>
-						<div class="flex-1 min-w-0">
-							<div class="truncate text-sm font-medium text-gray-900">
-								{{ videoInfo?.user?.nickname || '未命名UP主' }}
+						<img
+							:src="videoInfo?.user?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'"
+							alt="avatar"
+							class="h-12 w-12 rounded-full border border-gray-100"
+						/>
+						<div>
+							<div class="font-medium text-gray-900">
+								{{ videoInfo?.user?.nickname || '未知UP主' }}
 							</div>
-							<div class="mt-2 flex items-center gap-2 text-xs">
-								<button
-									class="h-7 rounded-full bg-[#00A1D6] px-3 text-xs font-medium text-white hover:bg-[#0090c0]"
-									type="button"
-								>
-									关注
-								</button>
-								<button
-									class="h-7 rounded-full border border-gray-300 px-3 text-xs font-medium text-gray-700 hover:bg-gray-50"
-									type="button"
-								>
-									发私信
-								</button>
+							<div class="text-xs text-gray-500">这家伙很懒，什么都没写</div>
+						</div>
+					</div>
+					<div class="mt-4 flex gap-2">
+						<button
+							class="flex-1 rounded bg-pink-500 py-1.5 text-sm font-medium text-white hover:bg-pink-600"
+						>
+							关注
+						</button>
+						<button
+							class="flex-1 rounded border border-gray-200 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
+						>
+							私信
+						</button>
+					</div>
+				</div>
+
+				<!-- Recommendations (Placeholder) -->
+				<div class="rounded-lg bg-white shadow-sm p-4">
+					<h3 class="mb-3 font-medium text-gray-900">相关推荐</h3>
+					<div class="space-y-3">
+						<div v-for="i in 5" :key="i" class="flex gap-2">
+							<div class="h-16 w-28 flex-shrink-0 rounded bg-gray-200"></div>
+							<div class="flex flex-col justify-between py-0.5">
+								<div class="text-sm font-medium line-clamp-2">推荐视频标题演示内容...</div>
+								<div class="text-xs text-gray-500">UP主名称</div>
 							</div>
 						</div>
 					</div>
-				</div>
-				<div class="rounded-lg bg-white shadow-sm p-4 text-xs text-gray-600">
-					<div class="font-medium text-gray-800 mb-1">视频信息</div>
-					<div>视频 ID：{{ videoId }}</div>
-					<div v-if="videoInfo?.duration">时长：{{ Math.round(videoInfo.duration) }} 秒</div>
 				</div>
 			</div>
 		</div>

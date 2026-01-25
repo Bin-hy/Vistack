@@ -576,37 +576,59 @@ watch(activeTab, val => {
 
 <template>
 	<BiliLayout>
-		<div class="flex items-start gap-6">
-			<aside class="w-56 space-y-4">
+		<div class="flex flex-col md:flex-row items-start gap-4 md:gap-6">
+			<aside class="w-full md:w-56 space-y-4">
 				<UiCard class="p-4 space-y-3">
 					<div class="text-sm font-semibold">创作中心</div>
-					<div class="text-xs text-gray-500 mt-1">内容管理</div>
-					<button
-						class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
-						:class="
-							activeTab === 'videos'
-								? 'bg-blue-50 text-blue-600 font-medium'
-								: 'text-gray-600 hover:bg-gray-50'
-						"
-						@click="switchTab('videos')"
-					>
-						视频管理
-					</button>
-					<div class="text-xs text-gray-500 mt-3">投稿</div>
-					<button
-						class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
-						:class="
-							activeTab === 'upload'
-								? 'bg-pink-50 text-pink-600 font-medium'
-								: 'text-gray-600 hover:bg-gray-50'
-						"
-						@click="switchTab('upload')"
-					>
-						视频投稿
-					</button>
+
+					<!-- Mobile Tabs (Horizontal) -->
+					<div class="flex md:hidden border-b border-gray-100 pb-2 mb-2">
+						<button
+							class="flex-1 text-center py-2 text-xs font-medium border-b-2"
+							:class="activeTab === 'videos' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600'"
+							@click="switchTab('videos')"
+						>
+							视频管理
+						</button>
+						<button
+							class="flex-1 text-center py-2 text-xs font-medium border-b-2"
+							:class="activeTab === 'upload' ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-600'"
+							@click="switchTab('upload')"
+						>
+							视频投稿
+						</button>
+					</div>
+
+					<!-- Desktop Sidebar (Vertical) -->
+					<div class="hidden md:block">
+						<div class="text-xs text-gray-500 mt-1">内容管理</div>
+						<button
+							class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
+							:class="
+								activeTab === 'videos'
+									? 'bg-blue-50 text-blue-600 font-medium'
+									: 'text-gray-600 hover:bg-gray-50'
+							"
+							@click="switchTab('videos')"
+						>
+							视频管理
+						</button>
+						<div class="text-xs text-gray-500 mt-3">投稿</div>
+						<button
+							class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
+							:class="
+								activeTab === 'upload'
+									? 'bg-pink-50 text-pink-600 font-medium'
+									: 'text-gray-600 hover:bg-gray-50'
+							"
+							@click="switchTab('upload')"
+						>
+							视频投稿
+						</button>
+					</div>
 				</UiCard>
 			</aside>
-			<div class="flex-1 space-y-4">
+			<div class="flex-1 space-y-4 w-full">
 				<template v-if="activeTab === 'upload'">
 					<UiCard class="p-6">
 						<h1 class="text-xl font-semibold mb-2">创作中心 · 视频投稿</h1>
