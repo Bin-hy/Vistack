@@ -920,7 +920,65 @@ func (v *VideoApi) GetVideoSegmentsSignature(c *gin.Context) {
 // GetVideoRecommend 获取用户视频推荐,
 // v1: 查询前20条按照时间desc的视频
 func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
+	var videos []mVideo.Video
+	// 查询条件：已发布，公开，按时间倒序，取前20
+	err := core.DB.Model(&mVideo.Video{}).
+		Where("status = ?", mVideo.VideoStatusPublished).
+		Where("visibility = ?", mVideo.VideoVisibilityPublic).
+		Order("created_at desc").
+		Limit(20).
+		Preload("CoverFile").
+		Preload("User").
+		Preload("User.Profile").
+		Preload("User.Profile.Avatar").
+		Find(&videos).Error
+
+	if err != nil {
+		core.Logger.Error("get recommend videos failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取推荐视频失败"})
+		return
+	}
+
+	var respList []VideoInfoResponse
+	for _, video := range videos {
+		var coverURL string
+		if video.CoverFile != nil {
+			coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
+		}
+
+		var author *VideoAuthorResponse
+		if video.User != nil {
+			nickname := video.User.Username
+			if video.User.Profile != nil && video.User.Profile.Nickname != nil && *video.User.Profile.Nickname != "" {
+				nickname = *video.User.Profile.Nickname
+			}
+
+			var avatarURL string
+			if video.User.Profile != nil && video.User.Profile.Avatar != nil {
+				avatarURL = video.User.Profile.Avatar.PublicURL(core.GetPublicBaseURL())
+			}
+			author = &VideoAuthorResponse{
+				ID:        strconv.FormatInt(video.User.ID, 10),
+				Nickname:  nickname,
+				AvatarURL: avatarURL,
+			}
+		}
+
+		respList = append(respList, VideoInfoResponse{
+			ID:          strconv.FormatInt(video.ID, 10),
+			Title:       video.Title,
+			Description: video.Description,
+			CoverURL:    coverURL,
+			Duration:    video.Duration,
+			Status:      string(video.Status),
+			Visibility:  string(video.Visibility),
+			CreatedAt:   video.CreatedAt,
+			UpdatedAt:   video.UpdatedAt,
+			User:        author,
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"videos": []mVideo.Video{},
+		"videos": respList,
 	})
 }
