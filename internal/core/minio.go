@@ -178,3 +178,14 @@ func GetPublicBaseURL() string {
 	u := Minio.EndpointURL()
 	return u.String()
 }
+
+// GetInternalBaseURL 获取 MinIO 内网基础 URL（用于服务端直接连接）
+func GetInternalBaseURL() string {
+	if Minio == nil {
+		return ""
+	}
+	u := Minio.EndpointURL()
+	fmt.Printf("Internal")
+
+	return u.String()
+}

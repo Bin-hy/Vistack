@@ -865,7 +865,8 @@ func (v *VideoApi) GetVideoSegmentsSignature(c *gin.Context) {
 		// 构造 STS Endpoint (通常与 S3 Endpoint 相同)
 		// 假设 Endpoint 配置为 "minio:9000" 或 "http://minio:9000"
 		// NewSTSAssumeRole 需要完整的 URL
-		stsEndpoint := core.GetPublicBaseURL()
+		// 使用内网地址连接 STS，避免公网 SSL 握手问题
+		stsEndpoint := core.GetInternalBaseURL()
 
 		stsCreds, err := credentials.NewSTSAssumeRole(stsEndpoint, stsOpts)
 		if err != nil {
