@@ -20,6 +20,7 @@ var MinioPublicEndpoint string
 // InitMinioClient 初始化 MinIO 客户端
 func InitMinioClient(cfg *config.AppConfig) {
 	minioConfig := cfg.MinIO
+	fmt.Printf("OnInitMinioClient, minioConfig: %+v\n", minioConfig)
 	if minioConfig.Endpoint == "" {
 		if Logger != nil {
 			Logger.Warn("MinIO endpoint is not configured, skipping initialization")
@@ -34,6 +35,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
 		Secure: minioConfig.Secure,
 	})
+	fmt.Printf("OnInitMinioClient, minioConfig.Endpoint: %s\n", client.EndpointURL())
 	if err != nil {
 		if Logger != nil {
 			Logger.Error("Failed to initialize MinIO client", zap.Error(err))

@@ -36,10 +36,10 @@ func main() {
 			}
 		}
 	}
+	fmt.Println("gorm automigrate failed:", cfg)
 
 	// 初始化 MinIO（如果提供配置）
 	core.InitMinioClient(&cfg)
-
 	// 初始化 Redis（如果提供配置）
 	core.InitRedis(&cfg)
 
