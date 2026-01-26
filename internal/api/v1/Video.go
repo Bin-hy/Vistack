@@ -243,7 +243,7 @@ func (v *VideoApi) GetUploadPartURL(c *gin.Context) {
 	reqParams.Set("partNumber", strconv.Itoa(req.PartNumber))
 
 	// 生成 URL
-	u, err := core.MinioCore.Presign(c.Request.Context(), "PUT", bucket, req.ObjectKey, expires, reqParams)
+	u, err := core.MinioCorePublic.Presign(c.Request.Context(), "PUT", bucket, req.ObjectKey, expires, reqParams)
 	if err != nil {
 		core.Logger.Error("get presigned url failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Get upload url failed"})

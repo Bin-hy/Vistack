@@ -1,5 +1,6 @@
 [minio]
 endpoint = "localhost:2591"
+public_endpoint = "localhost:2591" # Public address for frontend (e.g. minio.example.com)
 access_key = "minioadmin"
 secret_key = "c9jA9ZvNXLwfs6n6fog6EJ0396Q77TbEm6G1XeDQbFG02GYwBsMh5wcTeJFzquD6sYE5saMGsrLnXernC5VaxjNfUuKqZxGRh9wf"
 secure = false

@@ -13,6 +13,8 @@ import (
 
 var Minio *minio.Client
 var MinioCore *minio.Core
+var MinioCorePublic *minio.Core
+var MinioPublicEndpoint string
 
 // InitMinioClient 初始化 MinIO 客户端
 func InitMinioClient(cfg *config.AppConfig) {
@@ -23,6 +25,8 @@ func InitMinioClient(cfg *config.AppConfig) {
 		}
 		return
 	}
+
+	MinioPublicEndpoint = minioConfig.PublicEndpoint
 
 	// Initialize MinIO client object.
 	client, err := minio.New(minioConfig.Endpoint, &minio.Options{
@@ -50,6 +54,25 @@ func InitMinioClient(cfg *config.AppConfig) {
 		return
 	}
 	MinioCore = coreClient
+
+	// Initialize MinIO Public Core client for Presigned URLs
+	publicEndpoint := minioConfig.Endpoint
+	if minioConfig.PublicEndpoint != "" {
+		publicEndpoint = minioConfig.PublicEndpoint
+	}
+	publicCoreClient, err := minio.NewCore(publicEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
+		Secure: minioConfig.Secure,
+	})
+	if err != nil {
+		if Logger != nil {
+			Logger.Error("Failed to initialize MinIO Public Core client", zap.Error(err))
+		}
+		// Fallback to internal core
+		MinioCorePublic = coreClient
+	} else {
+		MinioCorePublic = publicCoreClient
+	}
 
 	if Logger != nil {
 		Logger.Info("MinIO client initialized successfully")
@@ -132,11 +155,20 @@ func InitMinioClient(cfg *config.AppConfig) {
 }
 
 func GetMinioObjectPublicURL(bucket, objectKey string) string {
-	return fmt.Sprintf("%s://%s/%s/%s", Minio.EndpointURL().Scheme, Minio.EndpointURL().Host, bucket, objectKey)
+	baseURL := GetPublicBaseURL()
+	return fmt.Sprintf("%s/%s/%s", baseURL, bucket, objectKey)
 }
 
 // GetPublicBaseURL 获取 MinIO 公网基础 URL
 func GetPublicBaseURL() string {
+	if MinioPublicEndpoint != "" {
+		scheme := "http"
+		if Minio != nil && Minio.EndpointURL().Scheme != "" {
+			scheme = Minio.EndpointURL().Scheme
+		}
+		return fmt.Sprintf("%s://%s", scheme, MinioPublicEndpoint)
+	}
+
 	if Minio == nil {
 		return ""
 	}

@@ -198,8 +198,72 @@ func handleVideoDeleteMessage(ctx context.Context, key, value []byte) error {
 	// 删除 video 行，解除对 cover_file_id 的外键引用
 	tx2.Delete(&video)
 	// 最后删除 files（仅删除 ref_count<=0 的）
-	if len(fileIDsToDelete) > 0 {
-		tx2.Where("id IN ? AND ref_count <= 0", fileIDsToDelete).Delete(&mFile.File{})
+	safeFileIDsToDelete := make([]int64, 0)
+	safeFilesToDelete := make([]mFile.File, 0)
+
+	for _, f := range filesToDelete {
+		var totalRefs int64
+		var count int64
+
+		// Check VideoSource
+		if err := tx2.Model(&mVideo.VideoSource{}).Where("file_id = ?", f.ID).Count(&count).Error; err != nil {
+			core.Logger.Error("❌ check video source ref failed", zap.Error(err))
+			tx2.Rollback()
+			return err
+		}
+		totalRefs += count
+
+		// Check VideoManifest
+		if err := tx2.Model(&mVideo.VideoManifest{}).Where("file_id = ?", f.ID).Count(&count).Error; err != nil {
+			core.Logger.Error("❌ check video manifest ref failed", zap.Error(err))
+			tx2.Rollback()
+			return err
+		}
+		totalRefs += count
+
+		// Check VideoTranscode (ManifestFileID)
+		if err := tx2.Model(&mVideo.VideoTranscode{}).Where("manifest_file_id = ?", f.ID).Count(&count).Error; err != nil {
+			core.Logger.Error("❌ check video transcode ref failed", zap.Error(err))
+			tx2.Rollback()
+			return err
+		}
+		totalRefs += count
+
+		// Check Video (CoverFileID)
+		if err := tx2.Model(&mVideo.Video{}).Where("cover_file_id = ?", f.ID).Count(&count).Error; err != nil {
+			core.Logger.Error("❌ check video cover ref failed", zap.Error(err))
+			tx2.Rollback()
+			return err
+		}
+		totalRefs += count
+
+		if totalRefs > 0 {
+			core.Logger.Warn("⚠️ file still referenced, skipping delete",
+				zap.Int64("file_id", f.ID),
+				zap.Int64("actual_refs", totalRefs),
+			)
+			// Fix ref_count
+			if err := tx2.Model(&mFile.File{}).Where("id = ?", f.ID).Update("ref_count", totalRefs).Error; err != nil {
+				core.Logger.Error("❌ fix ref_count failed", zap.Error(err))
+				tx2.Rollback()
+				return err
+			}
+			continue
+		}
+
+		safeFileIDsToDelete = append(safeFileIDsToDelete, f.ID)
+		safeFilesToDelete = append(safeFilesToDelete, f)
+	}
+
+	// Update filesToDelete for MinIO deletion
+	filesToDelete = safeFilesToDelete
+
+	if len(safeFileIDsToDelete) > 0 {
+		if err := tx2.Where("id IN ? AND ref_count <= 0", safeFileIDsToDelete).Delete(&mFile.File{}).Error; err != nil {
+			core.Logger.Error("❌ delete files failed", zap.Error(err))
+			tx2.Rollback()
+			return err
+		}
 	}
 	if err := tx2.Commit().Error; err != nil {
 		core.Logger.Error("❌ tx2 commit failed", zap.Error(err))
