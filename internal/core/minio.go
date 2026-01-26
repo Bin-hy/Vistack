@@ -23,9 +23,9 @@ func InitMinioClient(cfg *config.AppConfig) {
 	fmt.Printf("OnInitMinioClient, minioConfig: %+v\n", minioConfig)
 	if minioConfig.Endpoint == "" {
 		if Logger != nil {
-			Logger.Warn("MinIO endpoint is not configured, skipping initialization")
+			Logger.Error("MinIO endpoint is not configured")
 		}
-		return
+		panic("MinIO endpoint is not configured. Please check your configuration.")
 	}
 
 	MinioPublicEndpoint = minioConfig.PublicEndpoint
@@ -62,7 +62,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 		if Logger != nil {
 			Logger.Error("Failed to initialize MinIO client", zap.Error(err))
 		}
-		return
+		panic(fmt.Sprintf("Failed to initialize MinIO client: %v", err))
 	}
 
 	Minio = client
@@ -76,7 +76,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 		if Logger != nil {
 			Logger.Error("Failed to initialize MinIO Core client", zap.Error(err))
 		}
-		return
+		panic(fmt.Sprintf("Failed to initialize MinIO Core client: %v", err))
 	}
 	MinioCore = coreClient
 
