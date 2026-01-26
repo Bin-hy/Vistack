@@ -27,11 +27,12 @@ type AppConfig struct {
 	} `mapstructure:"database"`
 
 	MinIO struct {
-		Endpoint  string `mapstructure:"endpoint"`
-		AccessKey string `mapstructure:"access_key"`
-		SecretKey string `mapstructure:"secret_key"`
-		Secure    bool   `mapstructure:"secure"` // 对应 app.toml 的 secure
-		Bucket    string `mapstructure:"bucket"`
+		Endpoint       string `mapstructure:"endpoint"`
+		PublicEndpoint string `mapstructure:"public_endpoint"`
+		AccessKey      string `mapstructure:"access_key"`
+		SecretKey      string `mapstructure:"secret_key"`
+		Secure         bool   `mapstructure:"secure"` // 对应 app.toml 的 secure
+		Bucket         string `mapstructure:"bucket"`
 	} `mapstructure:"minio"`
 
 	Auth struct {
