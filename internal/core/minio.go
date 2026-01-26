@@ -89,7 +89,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 			if Logger != nil {
 				Logger.Error("Failed to check if bucket exists", zap.Error(err))
 			}
-			return
+			panic(fmt.Sprintf("Failed to connect to MinIO (BucketExists check failed): %v. Please check your configuration.", err))
 		}
 
 		if !exists {

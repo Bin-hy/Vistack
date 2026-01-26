@@ -28,6 +28,20 @@ func Viper() *viper.Viper {
 	if err != nil {
 		panic(fmt.Errorf("fatal error config file: %w", err))
 	}
+
+	// 尝试加载 app.local.toml 进行覆盖（仅当使用默认配置时）
+	if cfg_path == config.DefaultConfigPath {
+		localPath := "conf/app.local.toml"
+		if _, err := os.Stat(localPath); err == nil {
+			v.SetConfigFile(localPath)
+			if err := v.MergeInConfig(); err != nil {
+				fmt.Printf("warning: failed to merge local config: %v\n", err)
+			} else {
+				fmt.Printf("Successfully merged local config from %s\n", localPath)
+			}
+		}
+	}
+
 	v.WatchConfig()
 
 	v.OnConfigChange(func(e fsnotify.Event) {
