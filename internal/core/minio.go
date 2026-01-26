@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/binhy/vistack/internal/config"
 	"github.com/minio/minio-go/v7"
@@ -108,7 +109,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 			"Statement": [
 				{
 					"Effect": "Allow",
-					"Principal": {"AWS": ["*"]},
+					"Principal": "*",
 					"Action": ["s3:GetObject"],
 					"Resource": ["arn:aws:s3:::%s/avatars/*","arn:aws:s3:::%s/covers/*"]
 				}
@@ -162,11 +163,10 @@ func GetMinioObjectPublicURL(bucket, objectKey string) string {
 // GetPublicBaseURL 获取 MinIO 公网基础 URL
 func GetPublicBaseURL() string {
 	if MinioPublicEndpoint != "" {
-		scheme := "http"
-		if Minio != nil && Minio.EndpointURL().Scheme != "" {
-			scheme = Minio.EndpointURL().Scheme
+		if strings.Contains(MinioPublicEndpoint, "://") {
+			return MinioPublicEndpoint
 		}
-		return fmt.Sprintf("%s://%s", scheme, MinioPublicEndpoint)
+		return fmt.Sprintf("http://%s", MinioPublicEndpoint)
 	}
 
 	if Minio == nil {
