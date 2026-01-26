@@ -30,12 +30,34 @@ func InitMinioClient(cfg *config.AppConfig) {
 
 	MinioPublicEndpoint = minioConfig.PublicEndpoint
 
+	// Helper to determine secure setting based on endpoint scheme
+	// If endpoint starts with http://, force secure=false
+	// If endpoint starts with https://, force secure=true
+	// Otherwise use config value
+	getSecure := func(endpoint string, defaultSecure bool) (string, bool) {
+		ep := endpoint
+		secure := defaultSecure
+		if strings.HasPrefix(endpoint, "http://") {
+			ep = strings.TrimPrefix(endpoint, "http://")
+			secure = false
+		} else if strings.HasPrefix(endpoint, "https://") {
+			ep = strings.TrimPrefix(endpoint, "https://")
+			secure = true
+		}
+		return ep, secure
+	}
+
+	// Internal endpoint processing
+	internalEndpoint, internalSecure := getSecure(minioConfig.Endpoint, minioConfig.Secure)
+
 	// Initialize MinIO client object.
-	client, err := minio.New(minioConfig.Endpoint, &minio.Options{
+	client, err := minio.New(internalEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
-		Secure: minioConfig.Secure,
+		Secure: internalSecure,
 	})
-	fmt.Printf("OnInitMinioClient, minioConfig.Endpoint: %s\n", client.EndpointURL())
+	if Logger != nil {
+		Logger.Info("MinIO Client Initialized", zap.String("endpoint", client.EndpointURL().String()))
+	}
 	if err != nil {
 		if Logger != nil {
 			Logger.Error("Failed to initialize MinIO client", zap.Error(err))
@@ -46,9 +68,9 @@ func InitMinioClient(cfg *config.AppConfig) {
 	Minio = client
 
 	// Initialize MinIO Core client for low-level access (Multipart Upload)
-	coreClient, err := minio.NewCore(minioConfig.Endpoint, &minio.Options{
+	coreClient, err := minio.NewCore(internalEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
-		Secure: minioConfig.Secure,
+		Secure: internalSecure,
 	})
 	if err != nil {
 		if Logger != nil {
@@ -59,13 +81,16 @@ func InitMinioClient(cfg *config.AppConfig) {
 	MinioCore = coreClient
 
 	// Initialize MinIO Public Core client for Presigned URLs
-	publicEndpoint := minioConfig.Endpoint
+	rawPublicEndpoint := minioConfig.Endpoint
 	if minioConfig.PublicEndpoint != "" {
-		publicEndpoint = minioConfig.PublicEndpoint
+		rawPublicEndpoint = minioConfig.PublicEndpoint
 	}
+
+	publicEndpoint, publicSecure := getSecure(rawPublicEndpoint, minioConfig.Secure)
+
 	publicCoreClient, err := minio.NewCore(publicEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
-		Secure: minioConfig.Secure,
+		Secure: publicSecure,
 	})
 	if err != nil {
 		if Logger != nil {
@@ -164,10 +189,19 @@ func GetMinioObjectPublicURL(bucket, objectKey string) string {
 
 // GetPublicBaseURL 获取 MinIO 公网基础 URL
 func GetPublicBaseURL() string {
+	// 优先使用配置的 PublicEndpoint
 	if MinioPublicEndpoint != "" {
+		// 如果配置已经包含协议头（http:// 或 https://），直接返回，不重写
 		if strings.Contains(MinioPublicEndpoint, "://") {
 			return MinioPublicEndpoint
 		}
+		// 如果未包含协议头，则根据 MinIO Client 的 Public Core 状态来决定
+		// 注意：这里我们使用 MinioCorePublic（它在 InitMinioClient 中已经根据 PublicEndpoint 和 Secure 初始化好了）
+		if MinioCorePublic != nil {
+			// MinioCorePublic.EndpointURL() 会正确反映 scheme (http/https)
+			return MinioCorePublic.EndpointURL().String()
+		}
+		// Fallback: 如果 MinioCorePublic 未初始化，根据全局配置拼装（默认 http）
 		return fmt.Sprintf("http://%s", MinioPublicEndpoint)
 	}
 
