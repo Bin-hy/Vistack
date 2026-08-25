@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: transcoder
+  labels:
+    app: transcoder
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: transcoder
+  template:
+    metadata:
+      labels:
+        app: transcoder
+    spec:
+      containers:
+        - name: transcoder
+          image: vistack-transcoder:latest
+          args: ["transcoder"]
+          env:
+            - name: VISTACK_CONFIG_PATH
+              value: /app/conf/app.k8s.toml
+            # 注入 Pod IP，transcoder 用它向 etcd 注册（worker 经 etcd 发现后直连）
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          ports:
+            - containerPort: 50051
+              name: grpc
+          volumeMounts:
+            - name: config
+              mountPath: /app/conf/app.k8s.toml
+              subPath: app.k8s.toml
+      volumes:
+        - name: config
+          configMap:
+            name: vistack-config

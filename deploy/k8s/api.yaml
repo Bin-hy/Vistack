@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: vistack:latest
+          args: ["api"]
+          env:
+            - name: VISTACK_CONFIG_PATH
+              value: /app/conf/app.k8s.toml
+          ports:
+            - containerPort: 8080
+              name: http
+          volumeMounts:
+            - name: config
+              mountPath: /app/conf/app.k8s.toml
+              subPath: app.k8s.toml
+      volumes:
+        - name: config
+          configMap:
+            name: vistack-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app: api
+  ports:
+    - port: 8080
+      targetPort: 8080
+      name: http

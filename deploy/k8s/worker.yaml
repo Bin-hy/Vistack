@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+  labels:
+    app: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      containers:
+        - name: worker
+          image: vistack:latest
+          args: ["worker"]
+          env:
+            - name: VISTACK_CONFIG_PATH
+              value: /app/conf/app.k8s.toml
+          volumeMounts:
+            - name: config
+              mountPath: /app/conf/app.k8s.toml
+              subPath: app.k8s.toml
+      volumes:
+        - name: config
+          configMap:
+            name: vistack-config

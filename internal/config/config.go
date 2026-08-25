@@ -64,6 +64,17 @@ type AppConfig struct {
 		AllowHeaders     []string `mapstructure:"allow_headers"`
 		AllowCredentials bool     `mapstructure:"allow_credentials"`
 	} `mapstructure:"cors"`
+
+	Etcd struct {
+		Endpoints []string `mapstructure:"endpoints"` // 如 ["localhost:2379"]
+		Prefix    string   `mapstructure:"prefix"`    // 注册前缀，默认 /vistack/transcoders
+	} `mapstructure:"etcd"`
+
+	Transcoder struct {
+		ListenAddr string `mapstructure:"listen_addr"` // transcoder 绑定地址，如 :50051
+		Addr       string `mapstructure:"addr"`        // worker 静态兜底地址，如 localhost:50051
+		UseEtcd    bool   `mapstructure:"use_etcd"`    // worker 是否通过 etcd 发现
+	} `mapstructure:"transcoder"`
 }
 
 const DefaultConfigPath = "conf/app.local.toml"

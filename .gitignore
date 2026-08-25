@@ -67,5 +67,11 @@ Thumbs.db
 # =========================
 # Docker
 # =========================
-*.dockerignore
 docker-compose.override.yml
+
+# cache
+.cache
+
+# agent
+dsh-usage/
+.codegraph/

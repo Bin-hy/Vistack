@@ -1,0 +1,17 @@
+# 构建上下文排除项
+.cache/
+.git/
+.gitignore
+docs/
+dsh-usage/
+web/
+**/node_modules/
+**/dist/
+*.log
+.env
+.env.local
+.env.*.local
+Dockerfile
+compose*.yml
+deploy/
+README.md

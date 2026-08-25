@@ -4,14 +4,15 @@ services:
     container_name: vistack-postgres
     env_file:
       - .env.local
-    # environment:
-    #   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    #   POSTGRES_USER: ${POSTGRES_USER}
-    #   POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
@@ -26,12 +27,9 @@ services:
   minio:
     image: minio/minio:latest
     container_name: video-dash-minio
-    command: server /data --console-address ":${MINIO_WEB_PORT:-9000}"
+    command: server /data --console-address ":9001"
     env_file:
       - .env.local
-    # environment:
-    #   MINIO_ROOT_USER: ${MINIO_USER}
-    #   MINIO_ROOT_PASSWORD: ${MINIO_PASSWORD}
     ports:
       - "${MINIO_WEB_PORT:-9000}:9000"
       - "${MINIO_API_PORT:-9001}:9001"
@@ -57,14 +55,84 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      # Replace CLUSTER_ID with a unique base64 UUID using "bin/kafka-storage.sh random-uuid"
-      # See https://docs.confluent.io/kafka/operations-tools/kafka-tools.html#kafka-storage-sh
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
     volumes:
       - kafkadata:/var/lib/kafka/data
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.16
+    container_name: vistack-etcd
+    command: >
+      etcd
+      --name vistack-etcd
+      --advertise-client-urls http://etcd:2379
+      --listen-client-urls http://0.0.0.0:2379
+      --data-dir /etcd-data
+    ports:
+      - "2379:2379"
+    volumes:
+      - etcddata:/etcd-data
+
+  api:
+    build:
+      context: .
+      target: vistack
+    image: vistack:latest
+    container_name: vistack-api
+    environment:
+      VISTACK_CONFIG_PATH: /app/conf/app.docker.toml
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      kafka:
+        condition: service_started
+    command: ["api"]
+
+  worker:
+    build:
+      context: .
+      target: vistack
+    image: vistack:latest
+    container_name: vistack-worker
+    environment:
+      VISTACK_CONFIG_PATH: /app/conf/app.docker.toml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      minio:
+        condition: service_started
+      kafka:
+        condition: service_started
+      etcd:
+        condition: service_started
+    command: ["worker"]
+
+  transcoder:
+    build:
+      context: .
+      target: vistack-transcoder
+    image: vistack-transcoder:latest
+    environment:
+      VISTACK_CONFIG_PATH: /app/conf/app.docker.toml
+    depends_on:
+      minio:
+        condition: service_started
+      etcd:
+        condition: service_started
+    command: ["transcoder"]
+    # 水平扩容：docker compose up --scale transcoder=3
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
   kafkadata:
+  etcddata:

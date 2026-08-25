@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package transcoder.v1;
+
+option go_package = "github.com/binhy/vistack/internal/transcoder/pb/transcoder/v1;transcoderpb";
+
+// TranscoderService 远程转码服务：封装 ffprobe/ffmpeg，读写 MinIO，无状态。
+service TranscoderService {
+  // ProcessVideo 下载原始视频、探测、抽封面、转码 DASH 并写回 MinIO。
+  rpc ProcessVideo(ProcessVideoRequest) returns (ProcessVideoResponse);
+}
+
+message QualityProfile {
+  int32  height     = 1; // 档位高度，如 720
+  string resolution = 2; // 展示名，如 "720p"
+}
+
+message ProcessVideoRequest {
+  string  bucket            = 1; // MinIO 桶名
+  string  object_key        = 2; // 原始视频 object key（如 raw/xxx.mp4）
+  string  output_prefix     = 3; // DASH 输出前缀（如 dash/{video_id}）
+  string  cover_object_key  = 4; // 封面 object key（如 covers/{video_id}.jpg）
+  double  cover_time_seconds = 5; // 抽帧时间点；0 表示自动选择
+  repeated int32 quality_heights = 6; // 空表示由 transcoder 自动选择 ABR 档位
+}
+
+message ProcessVideoResponse {
+  double duration_seconds      = 1;
+  string manifest_object_key   = 2;
+  int64  manifest_size         = 3;
+  string cover_object_key      = 4; // 空表示未生成封面
+  int64  cover_size            = 5;
+  repeated QualityProfile profiles = 6;
+}

@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vistack-config
+data:
+  # 生产环境建议将凭证迁移到 Secret，通过 VISTACK_* 环境变量注入。
+  app.k8s.toml: |
+    [minio]
+    endpoint = "minio:9000"
+    public_endpoint = "http://localhost:9000"   # 按实际 Ingress/NodePort 调整
+    access_key = "minioadmin"
+    secret_key = "minioadmin"
+    secure = false
+    bucket = "vistack"
+
+    [database]
+    host = "postgres"
+    port = 5432
+    user = "postgres"
+    password = "postgres"
+    name = "postgres"
+    max_idle_conns = 10
+    max_open_conns = 100
+    conn_max_lifetime = 3600
+
+    [server]
+    port = 8080
+    host = "0.0.0.0"
+
+    [auth]
+    jwt_secret = "secret"
+    jwt_expiration = 3600
+
+    [redis]
+    host = "redis"
+    port = 6379
+    db = 0
+    password = ""
+    pool_size = 10
+
+    [snowflake]
+    node_id = 1
+
+    [kafka]
+    brokers = ["kafka:9092"]
+    group_id = "vistack-consumer-group"
+
+    [cors]
+    enable = true
+    allow_origins = ["http://localhost:8335", "http://localhost:8336"]
+    allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+    allow_headers = ["Content-Type", "Authorization", "X-Requested-With"]
+    allow_credentials = true
+
+    [etcd]
+    endpoints = ["etcd:2379"]
+    prefix = "/vistack/transcoders"
+
+    [transcoder]
+    listen_addr = ":50051"
+    addr = "transcoder:50051"
+    use_etcd = true
