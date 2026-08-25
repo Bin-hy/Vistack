@@ -1,145 +1,224 @@
 <h1 align="center">
-  <img src="./web/public/logo.png" alt="Vistack" width="200">
-  <br>Vistack<br>
+  <img src="./web/public/logo.png" alt="Vistack" width="120" />
+  <br/>
+  Vistack
 </h1>
 
-# 🎥 Vistack
+<p align="center">
+  <b>高性能 · 分布式 · 云原生的直播与点播一体化视频平台</b>
+</p>
 
-**Vistack** 是一个高性能、分布式的视频平台，支持 **实时直播（Live Streaming）** 和 **视频点播（VOD）**。  
-项目专注于 **高并发、高可扩展性** 的设计实践，采用现代云原生技术栈构建。
-
-在线体验：<https://vistack.huai-xhy.site>
-
----
-
-## 🚀 项目特点
-
-- **直播模块**  
-  - 使用 **OBS** 作为客户端采集与编码（H.264/AAC）  
-  - **live777 (Rust SFU)** 作为流分发服务器，支持多用户拉流观看  
-  - 服务器不做转码，轻量高效，高并发能力强  
-
-- **视频点播模块**  
-  - 使用 **DASH**（`.mpd + .m4s`）作为视频分片方案，支持自适应码率播放  
-  - **Go 后端** 管理视频元信息、生成上传和播放签名 URL  
-  - **MinIO** 存储原视频和转码后的 DASH 分片  
-  - 前端使用 **dash.js / Video.js** 播放 DASH 视频  
-
-- **分布式与可扩展**  
-  - 异步转码服务（Go Worker + FFmpeg）  
-  - 消息队列（NATS / RabbitMQ）分发转码任务  
-  - 支持水平扩展、容器化部署（Docker / Kubernetes）  
-
-- **安全与防盗链**  
-  - 直播推流密钥验证  
-  - DASH 播放使用预签名 URL 或 JWT 鉴权  
+<p align="center">
+  <a href="https://vistack.pages.dev"><img src="https://img.shields.io/badge/Demo-Live-00A1D6?style=flat-square" alt="Demo"/></a>
+  <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go"/>
+  <img src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue"/>
+  <img src="https://img.shields.io/badge/gRPC-1.82-244c5a?style=flat-square" alt="gRPC"/>
+  <img src="https://img.shields.io/badge/etcd-v3-419EDA?style=flat-square&logo=etcd&logoColor=white" alt="etcd"/>
+  <img src="https://img.shields.io/badge/Kafka-3.x-231F20?style=flat-square&logo=apachekafka&logoColor=white" alt="Kafka"/>
+  <img src="https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker"/>
+  <img src="https://img.shields.io/badge/Kubernetes-ready-326CE5?style=flat-square&logo=kubernetes&logoColor=white" alt="K8s"/>
+  <img src="https://img.shields.io/badge/License-MIT-8A2BE2?style=flat-square" alt="License"/>
+</p>
 
 ---
 
-## 🧩 系统架构概览
+## ✨ 简介
 
+**Vistack** 是一个面向高并发场景的分布式视频平台，同时支持**实时直播（Live Streaming）**与**视频点播（VOD）**。项目以「高并发、可水平扩展」为核心设计目标，实践了一套云原生的分布式转码与流媒体架构：任务队列解耦、gRPC 远程转码、etcd 服务发现、对象存储分发，全部可一键容器化并平滑迁移至 Kubernetes。
 
----
+> 🎯 在线体验：<https://vistack.pages.dev>
+
+## 🚀 核心特性
+
+### 视频点播（VOD）
+- **分片上传 + 秒传**：MinIO Multipart 直传 + 文件哈希去重，断点续传。
+- **自适应码率（DASH ABR）**：FFmpeg 按源分辨率智能选择 240p–4K 档位，`manifest.mpd` + `init-*.m4s` / `chunk-*.m4s` 分片，前端 dash.js 无缝切换清晰度。
+- **远程转码服务**：FFmpeg 隔离在独立容器，通过 **gRPC `ProcessVideo`** 调用，输入/输出均走 MinIO，无状态、可任意副本接任务。
+- **防盗链**：预签名 URL / STS 临时凭证鉴权。
+
+### 直播（Live）
+- 基于 **live777（Rust SFU）** 的 WebRTC 分发，服务端轻量、高并发，OBS 推流 → 多端拉流。
+
+### 分布式与可扩展
+- **三角色拆分**：`api` / `worker` / `transcoder` 三个进程独立部署、独立扩容。
+- **任务队列**：Kafka 分发转码/删除任务，Redis ZSet 指数退避重试 + Watchdog 超时兜底。
+- **服务发现**：transcoder 实例向 **etcd** 注册并保活，worker 经 etcd 动态发现 + gRPC `round_robin` 负载均衡。
+- **容器化 & 云原生**：Docker Compose 一键起栈，附 Kubernetes 清单。
+
+### 安全与权限
+- JWT 认证、RBAC 细粒度权限（`authorities` + 角色/用户两级授权）、推流密钥校验。
+
+## 🧩 系统架构
+
+```mermaid
+flowchart LR
+    subgraph Client["客户端"]
+        OBS[OBS 推流]
+        Web[Web 前端<br/>Vue3 + dash.js]
+    end
+
+    subgraph Apps["应用服务 · 可独立扩容"]
+        API[api<br/>Gin HTTP · 上传/预签名]
+        Worker[worker<br/>Kafka 消费者 · 编排]
+        TC[transcoder<br/>gRPC · FFmpeg]
+    end
+
+    subgraph Infra["基础设施"]
+        PG[(PostgreSQL)]
+        R[(Redis)]
+        M[(MinIO)]
+        K[(Kafka)]
+        E[(etcd)]
+        SFU[live777 SFU]
+    end
+
+    Web -->|HTTP /api/v1| API
+    OBS -->|RTMP/WHIP 推流| SFU
+    Web -->|WebRTC 拉流| SFU
+
+    API -->|投递转码/删除任务| K
+    K -->|消费任务| Worker
+    Worker -->|服务发现| E
+    Worker -->|gRPC ProcessVideo| TC
+    TC -->|注册/保活| E
+    TC -->|下载原片 / 上传 DASH| M
+    Worker -->|读写元数据| PG
+    Worker -->|租约/重试| R
+    API --> PG
+    API --> R
+    Web -->|播放 DASH / 封面| M
+```
+
+### 转码流水线
+
+```
+上传分片 ──> api(CompleteVideoUpload) ──> Kafka[transcode]
+  ──> worker 消费 ──> 置 processing ──> etcd 发现 transcoder
+  ──> gRPC ProcessVideo ──> transcoder: MinIO 下载 → ffprobe → 抽封面 → DASH 转码 → MinIO 上传
+  ──> 返回(时长/清单/封面/档位) ──> worker 事务写库 ──> 视频 published
+```
+
+失败时按指数退避重投；处理中超时由 Watchdog 兜底；删除视频走 `Kafka[delete_file]` 异步清理对象与元数据。
 
 ## ⚙️ 技术栈
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | Vue3 + Pinia + dash.js / Video.js |
-| 后端 API | Go + Gin/Fiber + PostgreSQL + Redis |
-| 直播服务 | live777 (Rust SFU) |
-| 对象存储 | MinIO (S3 兼容) |
-| 转码 | FFmpeg + Go Worker |
-| 消息队列 | NATS / RabbitMQ |
-| 代理 & CDN | Nginx / 可选 CDN |
+| 前端 | Vue 3 + Pinia + Tailwind CSS + dash.js / Video.js |
+| 后端 API | Go 1.26 + Gin + GORM + PostgreSQL + Redis |
+| 服务通信 | gRPC + Protobuf（buf 生成） |
+| 服务发现 | etcd |
+| 任务队列 | Kafka（segmentio/kafka-go）+ Redis 延迟队列 |
+| 转码 | FFmpeg / FFprobe（独立 transcoder 容器） |
+| 对象存储 | MinIO（S3 兼容） |
+| 直播 | live777（Rust SFU） |
 | 部署 | Docker Compose / Kubernetes |
-| 监控 | Prometheus + Grafana |
+| 可观测性 | zap 结构化日志（预留 Prometheus/Grafana） |
 
----
+## 📁 目录结构
 
-## � 界面展示
-
-- 首页：展示推荐内容，提供一键进入创作中心的入口。
-- 创作中心：参考 Bilibili 风格的视频投稿界面，支持分片上传、进度展示、创作空间视频列表。
-- 播放页：自适应码率 DASH 播放器，支持清晰度切换、弹幕、UP 主信息展示，预留点赞 / 收藏 / 转发等交互按钮。
-- 个人中心：展示用户基础信息（昵称、头像）及相关视频信息。
-
-展示网站：<https://vistack.huai-xhy.site>
-
----
-
-## �🔹 核心流程
-
-### 直播
-
-1. OBS 客户端采集 + 转码 → 推流到 live777  
-2. live777 负责流转发 → WebRTC 前端观看  
-3. 可选同步录制 → 存储到 MinIO，支持回放  
-
-### 点播 (VOD)
-
-1. 用户上传视频 → Go API 生成 MinIO 上传签名 URL  
-2. 转码服务使用 FFmpeg 生成 DASH 分片 → 上传到 MinIO  
-3. 前端通过 dash.js / Video.js 播放 DASH 视频  
-4. 可生成 HLS 备份兼容 iOS Safari  
-
----
-
-## 🧭 项目目标
-
-- 掌握 **Go 分布式架构设计** 和 **高并发任务调度**  
-- 学习 **Rust SFU (live777) 实时流媒体分发**  
-- 实践 **云原生部署与可观测性**（Docker + Prometheus + Grafana）  
-- 实现 **直播 + 点播一体化视频平台**  
-
----
-
-# 快速启动
-
-## docker 启动
-
-```bash
-cp .env .env.local
-docker-compose up -d
+```
+Vistack
+├── cmd/vistack/            # 入口：按 VISTACK_ROLE 分发 api/worker/transcoder
+├── internal/
+│   ├── role/               # 三角色启动引导
+│   ├── api/v1/             # HTTP 处理器
+│   ├── routers/            # 路由与中间件注册
+│   ├── core/               # DB/Redis/MinIO/Kafka/Snowflake 等基础设施封装
+│   │   └── message_queue/  # transcode(worker/retry/watchdog)、video(删除)
+│   ├── transcoder/         # gRPC 转码服务 + ffmpeg 逻辑 + etcd 注册
+│   ├── discovery/          # etcd → gRPC resolver 服务发现
+│   ├── config/             # 配置结构（Viper）
+│   └── model/entity/       # GORM 实体
+├── proto/transcoder/v1/    # gRPC 契约（buf）
+├── migrations/             # GORM 自动迁移
+├── conf/                   # app.toml / app.docker.toml 配置
+├── deploy/k8s/             # Kubernetes 清单
+├── web/                    # pnpm monorepo：ui / web-client / web-admin
+├── Dockerfile              # 双 target：vistack / vistack-transcoder
+└── compose.yml             # 一键起栈
 ```
 
-## server
+## 🚀 快速开始
 
-- `conf/app.toml` 是 `server` 配置文件，
+### 方式一：Docker Compose（推荐）
 
 ```bash
-go mod tidy
-go run .
+cp .env.example .env.local
+docker compose up --build -d
 ```
 
-## web
+启动后包含 **api(8080) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务。水平扩容转码：
 
-- `web/` 是 `web` 前端项目目录，
+```bash
+docker compose up --scale transcoder=3 -d
+```
+
+### 方式二：本地开发
+
+**后端**（需要本地 PostgreSQL / Redis / MinIO / Kafka / etcd，或复用 compose 中的基础设施）：
+
+```bash
+go run ./cmd/vistack api        # API 服务（默认 :8080）
+go run ./cmd/vistack worker     # 转码编排 Worker
+go run ./cmd/vistack transcoder # gRPC 转码服务（需本机安装 FFmpeg）
+```
+
+**前端**（pnpm workspace）：
 
 ```bash
 pnpm install
-pnpm run dev
+pnpm run dev      # 启动 web-client(:8335) 与 web-admin(:8334)
 ```
 
+> 前端通过 `web/*/.env.development` 中的 `VITE_API_BASE` 指向 API，默认 `http://localhost:8333/api/v1`；请确保其与后端实际监听端口一致。
 
-# 数据库表结构
+## 🔧 配置
 
-| 模块                | 表名                 | 说明                                    |
-| ----------------- | ------------------ | ------------------------------------- |
-| 🧍‍♂️ 用户系统 & 权限管理 | `users`            | 用户基本信息，包含登录凭证、邮箱、状态、关联角色等             |
-|                   | `user_profiles`    | 用户扩展资料（昵称、头像等）                         |
-|                   | `roles`            | 角色表，用于定义系统角色（如管理员、普通用户、审核员等）          |
-|                   | `authorities`      | 权限表，存储资源方法（GET/POST 等）与资源 URI（REST 接口路径） |
-|                   | `role_authority`   | 角色与权限的多对多关联，实现 RBAC（基于角色的访问控制）        |
-|                   | `user_authority`   | 用户级别的特定权限授权/禁用，实现更细粒度的权限控制            |
-| 📁 文件管理           | `files`            | 通用文件表，存储 MinIO 桶名、对象 Key、引用类型（头像/视频/封面等）、大小等 |
-| 🎬 视频管理           | `videos`           | 视频主表，存储视频标题、描述、封面文件 ID、时长、状态、可见性等      |
-|                   | `video_sources`    | 原始视频上传记录（关联 videos 与 files）              |
-|                   | `video_transcodes` | 转码任务与状态，记录转码进度、分辨率、编码格式、清单文件 ID        |
-|                   | `video_manifest`   | 播放清单表，记录 DASH/HLS 清单文件、协议类型、码率档位 profiles 等 |
-| 🏷️ 标签系统          | `tags`             | 标签表，用于管理视频分类、话题等标签                    |
-|                   | `video_tags`       | 视频与标签的关联关系，多对多映射                      |
-| 💬 社交互动           | `video_comments`   | 视频评论表，支持父子评论结构                         |
-|                   | `video_likes`      | 视频点赞关系表（视频 ID + 用户 ID 复合主键）          |
-|                   | `video_favorites`  | 视频收藏关系表（视频 ID + 用户 ID 复合主键）          |
-| 📈 播放统计           | `video_play_logs`  | 视频播放日志，记录播放用户、时间、IP、User-Agent 等信息    |
+后端配置由 Viper 加载（`conf/app.toml`，本地覆盖 `conf/app.local.toml`，容器内 `conf/app.docker.toml`），并支持 `VISTACK_` 前缀环境变量覆盖（如 `VISTACK_DATABASE_HOST`）。
+
+| 配置段 | 说明 |
+|--------|------|
+| `[server]` | HTTP 监听地址/端口 |
+| `[database]` / `[redis]` | PostgreSQL / Redis 连接 |
+| `[minio]` | 对象存储端点、凭证、桶 |
+| `[kafka]` | 消息队列 brokers 与消费组 |
+| `[etcd]` | 服务发现端点与注册前缀 |
+| `[transcoder]` | gRPC 监听地址、静态兜底地址、是否走 etcd 发现 |
+| `[auth]` / `[cors]` | JWT 与跨域 |
+
+三个角色通过 `VISTACK_ROLE`（或启动命令首个位置参数）选择：`api` / `worker` / `transcoder`。
+
+## 🗄️ 数据库表结构
+
+| 模块 | 表名 | 说明 |
+|------|------|------|
+| 用户 & 权限 | `users` | 用户基本信息（登录凭证、邮箱、状态、角色） |
+| | `user_profiles` | 用户扩展资料（昵称、头像） |
+| | `roles` / `authorities` | 角色表 / 权限表（资源方法 + URI） |
+| | `role_authority` / `user_authority` | 角色-权限 / 用户-权限关联（RBAC） |
+| 文件管理 | `files` | 通用文件表（桶、Key、引用类型、大小、引用计数） |
+| 视频管理 | `videos` | 视频主表（标题、描述、封面、时长、状态、可见性） |
+| | `video_sources` | 原始视频上传记录 |
+| | `video_transcodes` | 转码任务与状态（进度、分辨率、编码、清单文件） |
+| | `video_manifest` | 播放清单（DASH/HLS、协议、码率档位） |
+| 标签系统 | `tags` / `video_tags` | 标签及视频-标签多对多 |
+| 社交互动 | `video_comments` | 评论（父子结构） |
+| | `video_likes` / `video_favorites` | 点赞 / 收藏（复合主键） |
+| 播放统计 | `video_play_logs` | 播放日志（用户、时间、IP、UA） |
+
+## 🗺️ Roadmap
+
+- [ ] 转码进度实时上报（server-streaming）
+- [ ] gRPC mTLS 鉴权
+- [ ] etcd 集群高可用
+- [ ] Prometheus / Grafana 可观测性接入
+- [ ] HLS 兼容输出
+
+## 🤝 贡献
+
+欢迎提交 Issue 与 Pull Request。贡献前请先阅读代码规范并遵循既有目录分层（`api` / `worker` / `transcoder` 职责边界见架构图）。
+
+## 📄 License
+
+本项目基于 [MIT License](./LICENSE) 发布，© 2025 Bin-hy。
