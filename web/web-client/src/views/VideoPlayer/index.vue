@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
-import DashPlayer, { type DanmakuItem } from '@/components/player-dash/DashPlayer.vue'
+import DashPlayer from '@/components/player-dash/DashPlayer.vue'
+import type { DanmakuItem } from '@/components/player-dash/danmaku/types'
 import { UiIcon } from '@/components/ui'
 import { baseURL, get, post } from '@/lib/http'
 import { formatCount } from '@/lib/format'
@@ -115,14 +116,14 @@ async function loadDanmaku(id: string, duration: number) {
 	}
 }
 
-async function handleSendDanmaku(text: string, timeOffset: number) {
+async function handleSendDanmaku(text: string, timeOffset: number, mode: number, color: string) {
 	if (!videoId.value) return
 	if (!userStore.isLoggedIn) {
 		toast({ title: '请先登录', type: 'error' })
 		return
 	}
 	try {
-		await post(`/videos/${videoId.value}/danmaku`, { content: text, time_offset: timeOffset })
+		await post(`/videos/${videoId.value}/danmaku`, { content: text, time_offset: timeOffset, color, mode })
 	} catch (e: any) {
 		toast({ title: e?.message ?? '发送失败', type: 'error' })
 	}

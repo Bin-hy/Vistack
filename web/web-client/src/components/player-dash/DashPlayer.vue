@@ -1,19 +1,15 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRef, watch } from 'vue'
 import type { VideoSegmentsSignatureCredentials } from '@/views/VideoPlayer'
-import { UiIcon } from '@/components/ui'
 import PlayButton from './controls/PlayButton.vue'
 import ProgressBar from './controls/ProgressBar.vue'
 import VolumeControl from './controls/VolumeControl.vue'
 import FullscreenBtn from './controls/FullscreenBtn.vue'
 import QualitySelector from './controls/QualitySelector.vue'
+import DanmakuBar from './danmaku/DanmakuBar.vue'
+import { useDanmaku } from './danmaku/useDanmaku'
+import type { DanmakuItem } from './danmaku/types'
 import { useDashPlayer } from './useDashPlayer'
-
-export interface DanmakuItem {
-	time_offset: number
-	content: string
-	color?: string
-}
 
 const props = withDefaults(defineProps<{
 	src: string
@@ -31,6 +27,10 @@ const props = withDefaults(defineProps<{
 	segmentsCredentials: null,
 	danmakus: () => [],
 })
+
+const emit = defineEmits<{
+	(e: 'send-danmaku', text: string, timeOffset: number, mode: number, color: string): void
+}>()
 
 const srcRef = ref(props.src)
 const autoplayRef = ref(props.autoplay)
@@ -62,12 +62,13 @@ const {
 const containerRef = ref<HTMLDivElement | null>(null)
 const isFullscreen = ref(false)
 
-const danmakuEnabled = ref(true)
-const danmakuText = ref('')
-const danmakuColors = ['#FFFFFF', '#FF7F50', '#00E5FF', '#FF6EB4', '#FFD700']
-const danmakuList = ref<{ id: number; text: string; track: number; color: string }[]>([])
-const danmakuTrackCount = 8
-let danmakuId = 1
+const danmakuLayerRef = ref<HTMLElement | null>(null)
+const danmaku = useDanmaku({
+	video: videoRef,
+	layer: danmakuLayerRef,
+	items: toRef(props, 'danmakus'),
+	onSend: (p) => emit('send-danmaku', p.content, p.timeOffset, p.mode, p.color),
+})
 
 let clickTimer: number | null = null
 let rightPressTimer: number | null = null
@@ -79,10 +80,6 @@ const playbackRate = ref(1)
 const rateOptions = [0.5, 1, 1.25, 1.5, 2]
 const showRateMenu = ref(false)
 const displayPlaybackRate = computed(() => (speedHoldActive.value ? 1.5 : playbackRate.value))
-
-const emit = defineEmits<{
-	(e: 'send-danmaku', text: string, timeOffset: number): void
-}>()
 
 function formatTime(value: number) {
 	if (!Number.isFinite(value) || value <= 0) return '00:00'
@@ -114,43 +111,6 @@ function toggleFullscreen() {
 function handleFullscreenChange() {
 	isFullscreen.value = !!document.fullscreenElement
 }
-
-function pushDanmaku(text: string, color?: string) {
-	const track = danmakuId % danmakuTrackCount
-	const c = color || danmakuColors[danmakuId % danmakuColors.length] || '#FFFFFF'
-	danmakuList.value.push({ id: danmakuId++, text, track, color: c })
-	if (danmakuList.value.length > 100) {
-		danmakuList.value.shift()
-	}
-}
-
-function handleSendDanmaku() {
-	const text = danmakuText.value.trim()
-	if (!text) return
-	pushDanmaku(text)
-	danmakuText.value = ''
-	emit('send-danmaku', text, currentTime.value)
-}
-
-// 按时间轴渲染历史弹幕：播放到某弹幕的 time_offset 时将其加入滚动队列
-const sortedDanmakus = computed(() => [...(props.danmakus || [])].sort((a, b) => a.time_offset - b.time_offset))
-let danmakuCursor = 0
-let prevCurrentTime = 0
-watch(currentTime, (t) => {
-	if (t < prevCurrentTime - 1) {
-		// 回退 seek：重置游标与已渲染弹幕，重新按时间轴渲染
-		danmakuCursor = 0
-		danmakuList.value = []
-	}
-	prevCurrentTime = t
-	const list = sortedDanmakus.value
-	while (danmakuCursor < list.length) {
-		const d = list[danmakuCursor]
-		if (!d || d.time_offset > t) break
-		pushDanmaku(d.content, d.color)
-		danmakuCursor++
-	}
-})
 
 function handleVideoClick() {
 	if (clickTimer !== null) return
@@ -365,21 +325,12 @@ watch(
 				@mouseup="handleVideoMouseUp"
 				@contextmenu="handleVideoContextMenu"
 			></video>
-			<div v-if="danmakuEnabled" class="pointer-events-none absolute inset-0 overflow-hidden">
-				<div
-					v-for="item in danmakuList"
-					:key="item.id"
-					class="danmaku-item absolute whitespace-nowrap text-sm drop-shadow"
-					:style="{
-						top: `${(item.track + 0.5) * (100 / danmakuTrackCount)}%`,
-						color: item.color,
-						textShadow: '0 0 2px #000, 0 0 4px #000, 0 0 6px #000',
-						fontWeight: 500,
-					}"
-				>
-					{{ item.text }}
-				</div>
+
+			<!-- 弹幕层 -->
+			<div ref="danmakuLayerRef" class="pointer-events-none absolute inset-0 overflow-hidden">
+				<canvas :ref="danmaku.canvasRef" class="absolute inset-0 h-full w-full"></canvas>
 			</div>
+
 			<div v-if="isReady" class="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-0 transition-opacity group-hover:opacity-100"></div>
 		</div>
 		<div class="absolute inset-x-0 bottom-0 z-10 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-2 md:p-3">
@@ -422,47 +373,8 @@ watch(
 				<QualitySelector :options="qualityOptions" :value="selectedQuality" @change="setQuality" />
 				<FullscreenBtn :fullscreen="isFullscreen" @toggle="toggleFullscreen" />
 			</div>
-			<div class="mt-1 md:mt-2 flex items-center gap-2">
-				<button
-					class="flex items-center rounded-full border px-2 md:px-3 py-0.5 md:py-1 text-xs whitespace-nowrap transition-colors"
-					:class="danmakuEnabled ? 'border-primary/50 bg-primary/15 text-primary' : 'border-white/30 bg-black/40 text-white/70'"
-					type="button"
-					@click="danmakuEnabled = !danmakuEnabled"
-				>
-					<UiIcon name="message-square" :size="13" class="mr-1 hidden sm:block" />
-					<span>{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</span>
-				</button>
-				<input
-					v-model="danmakuText"
-					class="h-7 md:h-8 flex-1 rounded border border-white/20 bg-black/40 px-2 md:px-3 text-xs text-white outline-none transition-colors placeholder:text-white/40 focus:border-primary/60"
-					placeholder="发个弹幕，一起讨论…"
-					@keyup.enter="handleSendDanmaku"
-				/>
-				<button
-					class="flex h-7 md:h-8 items-center gap-1 rounded bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] px-3 md:px-4 text-xs font-medium text-white transition-all hover:brightness-110 whitespace-nowrap"
-					type="button"
-					@click="handleSendDanmaku"
-				>
-					<UiIcon name="send" :size="13" />
-					<span>发送</span>
-				</button>
-			</div>
+
+			<DanmakuBar :engine="danmaku" />
 		</div>
 	</div>
 </template>
-
-<style scoped>
-.danmaku-item {
-	left: 100%;
-	animation: danmaku-move 8s linear forwards;
-}
-
-@keyframes danmaku-move {
-	0% {
-		transform: translateX(0);
-	}
-	100% {
-		transform: translateX(-200%);
-	}
-}
-</style>
