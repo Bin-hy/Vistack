@@ -75,8 +75,8 @@ type AppConfig struct {
 	} `mapstructure:"cors"`
 
 	Etcd struct {
-		Endpoints []string `mapstructure:"endpoints"` // 如 ["localhost:2379"]
-		Prefix    string   `mapstructure:"prefix"`    // 注册前缀，默认 /vistack/transcoders
+		Endpoints []string `mapstructure:"endpoints"`  // 如 ["localhost:2379"]
+		Prefix    string   `mapstructure:"prefix"`     // 注册前缀，默认 /vistack/transcoders
 		LeaderTTL int      `mapstructure:"leader_ttl"` // 领导选举租约 TTL 秒，默认 10
 	} `mapstructure:"etcd"`
 

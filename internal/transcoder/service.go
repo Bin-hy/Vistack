@@ -144,11 +144,11 @@ func (s *Service) ProcessVideo(ctx context.Context, req *transcoderpb.ProcessVid
 	}
 
 	return &transcoderpb.ProcessVideoResponse{
-		DurationSeconds:    durationSec,
-		ManifestObjectKey:  manifestObjectKey,
-		ManifestSize:       manifestSize,
-		CoverObjectKey:     coverObjectKey,
-		CoverSize:          coverSize,
-		Profiles:           profiles,
+		DurationSeconds:   durationSec,
+		ManifestObjectKey: manifestObjectKey,
+		ManifestSize:      manifestSize,
+		CoverObjectKey:    coverObjectKey,
+		CoverSize:         coverSize,
+		Profiles:          profiles,
 	}, nil
 }
