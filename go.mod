@@ -3,6 +3,7 @@ module github.com/binhy/vistack
 go 1.26
 
 require (
+	github.com/alicebob/miniredis/v2 v2.38.0
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/gin-contrib/zap v1.1.5
@@ -16,6 +17,7 @@ require (
 	go.etcd.io/etcd/client/v3 v3.7.1
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.51.0
+	golang.org/x/sync v0.20.0
 	google.golang.org/grpc v1.82.1
 	google.golang.org/protobuf v1.36.11
 	gorm.io/driver/postgres v1.6.0
@@ -72,6 +74,7 @@ require (
 	github.com/tinylib/msgp v1.3.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.3.0 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.7.1 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.7.1 // indirect
 	go.uber.org/mock v0.5.0 // indirect
@@ -80,7 +83,6 @@ require (
 	golang.org/x/arch v0.20.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect

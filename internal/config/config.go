@@ -56,6 +56,20 @@ type AppConfig struct {
 		PoolSize int    `mapstructure:"pool_size"`
 	} `mapstructure:"redis"`
 
+	// cache: Redis 缓存层配置（读多写少路径的 Cache-Aside 三件套）
+	Cache struct {
+		Enabled       bool  `mapstructure:"enabled"`
+		DefaultTTLMin int   `mapstructure:"default_ttl_min"` // 秒
+		DefaultTTLMax int   `mapstructure:"default_ttl_max"` // 秒
+		NullTTL       int   `mapstructure:"null_ttl"`        // 秒
+		LockTTL       int   `mapstructure:"lock_ttl"`        // 秒
+		LockWaitMS    int   `mapstructure:"lock_wait_ms"`    // 毫秒
+		RecommendTTL  int   `mapstructure:"recommend_ttl"`   // 秒
+		BloomEnabled  bool  `mapstructure:"bloom_enabled"`
+		BloomBits     int64 `mapstructure:"bloom_bits"`
+		BloomHashes   int   `mapstructure:"bloom_hashes"`
+	} `mapstructure:"cache"`
+
 	Snowflake struct {
 		NodeID int64 `mapstructure:"node_id"`
 	} `mapstructure:"snowflake"`

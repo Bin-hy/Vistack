@@ -30,6 +30,7 @@ func RunAPI(cfg *config.AppConfig) {
 	core.InitDB(cfg)
 	core.InitMinioClient(cfg)
 	core.InitRedis(cfg)
+	core.InitCache(cfg)
 	core.InitSnowflake(cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -56,6 +57,9 @@ func RunAPI(cfg *config.AppConfig) {
 
 	core.InitKafka(cfg)
 	defer core.CloseKafka()
+
+	// 异步全量构建视频布隆过滤器（best-effort，失败仅记日志）
+	go v1.BuildVideoBloom(context.Background())
 
 	switch cfg.Server.Mode {
 	case "release":

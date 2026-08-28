@@ -36,6 +36,18 @@ db = 0
 password = ""
 pool_size = 10
 
+[cache]
+enabled = true
+default_ttl_min = 300
+default_ttl_max = 600
+null_ttl = 60
+lock_ttl = 5
+lock_wait_ms = 2000
+recommend_ttl = 300
+bloom_enabled = true
+bloom_bits = 10000000
+bloom_hashes = 7
+
 [snowflake]
 node_id = 0 # 0 = 自动从实例标识(hostname/POD_IP)派生，多副本避免 ID 冲突
 

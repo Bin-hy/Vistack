@@ -3,6 +3,7 @@ package v1
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -12,13 +13,13 @@ import (
 
 	"github.com/binhy/vistack/internal/consts"
 	"github.com/binhy/vistack/internal/core"
+	"github.com/binhy/vistack/internal/core/cache"
 	"github.com/binhy/vistack/internal/core/message_queue/transcode"
 	mq_video "github.com/binhy/vistack/internal/core/message_queue/video"
 	"github.com/binhy/vistack/internal/global"
 	mFile "github.com/binhy/vistack/internal/model/entity/file"
 	mVideo "github.com/binhy/vistack/internal/model/entity/video"
 	"github.com/binhy/vistack/pkg/auth"
-	"github.com/binhy/vistack/pkg/timeutil"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -143,6 +144,9 @@ func (v *VideoApi) InitVideoUpload(c *gin.Context) {
 		}
 
 		tx.Commit()
+
+		// 0.45 新增视频 ID 到布隆过滤器（best-effort）
+		addVideoBloom(context.Background(), video.ID)
 
 		// 0.5 发送 Kafka 消息
 		msg := transcode.TranscodeMessage{
@@ -400,6 +404,9 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 
 	tx.Commit()
 
+	// 2.5 新增视频 ID 到布隆过滤器（best-effort）
+	addVideoBloom(context.Background(), video.ID)
+
 	// 3. 发送 Kafka 消息
 	// 消息格式: {"video_id": 1, "transcode_id": 1, "object_key": "raw/xxx.mp4"}
 	msg := transcode.TranscodeMessage{
@@ -472,6 +479,9 @@ func (v *VideoApi) DeleteVideo(c *gin.Context) {
 		return
 	}
 
+	// 2.5 失效缓存
+	deleteCache(c.Request.Context(), videoInfoCacheKey(video.ID), cacheKeyVideoRecommend)
+
 	// 3. 触发异步清理任务（消费者负责清理 dash/{video_id} 与引用计数）
 	msg := mq_video.VideoDeleteMessage{
 		VideoID: video.ID,
@@ -487,7 +497,6 @@ func (v *VideoApi) DeleteVideo(c *gin.Context) {
 }
 
 // GetVideoInfo 获取视频信息
-// 获取视频信息
 func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 	idStr := c.Param("id")
 	videoID, err := strconv.ParseInt(idStr, 10, 64)
@@ -496,63 +505,46 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 		return
 	}
 
-	key := fmt.Sprintf("videoInfo:%d", videoID)
 	ctx := c.Request.Context()
-	val, err := core.Redis.Get(ctx, key).Result()
-	if err == nil && val != "" {
-		var cached VideoInfoResponse
-		if e := json.Unmarshal([]byte(val), &cached); e == nil {
-			c.JSON(http.StatusOK, cached)
-			return
-		}
-	}
-
-	// 过期只能由一个请求刷新，其他请求等待
-	lockKey := fmt.Sprintf("videoInfoV2:%d-locked", videoID)
-	ok, err := core.Redis.SetNX(ctx, lockKey, "1", 5*time.Second).Result()
-	if err != nil {
-		core.Logger.Error("set video info lock failed", zap.Error(err))
-	}
-	if !ok {
-		val, err = core.Redis.Get(ctx, key).Result()
-		if err == nil && val != "" {
-			var cached VideoInfoResponse
-			if e := json.Unmarshal([]byte(val), &cached); e == nil {
-				c.JSON(http.StatusOK, cached)
-				return
+	var resp VideoInfoResponse
+	found, err := getOrLoad(ctx, videoInfoCacheKey(videoID), &resp, func(ctx context.Context) (any, bool, error) {
+		var video mVideo.Video
+		if err := core.DB.Preload("CoverFile").First(&video, videoID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, false, nil
 			}
+			return nil, false, err
 		}
-	}
 
-	var video mVideo.Video
-	if err := core.DB.Preload("CoverFile").First(&video, videoID).Error; err != nil {
+		var coverURL string
+		if video.CoverFile != nil {
+			coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
+		}
+
+		author := resolveAuthor(ctx, video.UserID)
+
+		return VideoInfoResponse{
+			ID:          strconv.FormatInt(video.ID, 10),
+			Title:       video.Title,
+			Description: video.Description,
+			CoverURL:    coverURL,
+			Duration:    video.Duration,
+			Status:      string(video.Status),
+			Visibility:  string(video.Visibility),
+			CreatedAt:   video.CreatedAt,
+			UpdatedAt:   video.UpdatedAt,
+			User:        author,
+		}, true, nil
+	}, cache.WithBloom())
+	if err != nil {
+		core.Logger.Error("get video info failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Query failed"})
+		return
+	}
+	if !found {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Video not found"})
 		return
 	}
-
-	var coverURL string
-	if video.CoverFile != nil {
-		coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
-	}
-
-	author := resolveAuthor(c.Request.Context(), video.UserID)
-
-	resp := VideoInfoResponse{
-		ID:          strconv.FormatInt(video.ID, 10),
-		Title:       video.Title,
-		Description: video.Description,
-		CoverURL:    coverURL,
-		Duration:    video.Duration,
-		Status:      string(video.Status),
-		Visibility:  string(video.Visibility),
-		CreatedAt:   video.CreatedAt,
-		UpdatedAt:   video.UpdatedAt,
-		User:        author,
-	}
-
-	bytes, _ := json.Marshal(resp)
-	_ = core.Redis.Set(ctx, key, string(bytes), timeutil.RandomRangeExpire(5*time.Minute, 10*time.Minute)).Err()
-	_ = core.Redis.Del(ctx, lockKey).Err()
 
 	c.JSON(http.StatusOK, resp)
 }
@@ -715,8 +707,7 @@ func (v *VideoApi) PutVideoInfo(c *gin.Context) {
 	}
 
 	// Clear cache
-	key := fmt.Sprintf("videoInfo:%d", videoID)
-	_ = core.Redis.Del(c.Request.Context(), key).Err()
+	deleteCache(c.Request.Context(), videoInfoCacheKey(videoID), cacheKeyVideoRecommend)
 
 	c.JSON(http.StatusOK, gin.H{"msg": "success", "video": video})
 }
@@ -874,50 +865,55 @@ func (v *VideoApi) GetVideoSegmentsSignature(c *gin.Context) {
 	})
 }
 
-// GetVideoRecommend 获取用户视频推荐,
-// v1: 查询前20条按照时间desc的视频
-func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
-	var videos []mVideo.Video
-	// 查询条件：已发布，公开，按时间倒序，取前20
-	err := core.DB.Model(&mVideo.Video{}).
-		Where("status = ?", mVideo.VideoStatusPublished).
-		Where("visibility = ?", mVideo.VideoVisibilityPublic).
-		Order("created_at desc").
-		Limit(20).
-		Preload("CoverFile").
-		Find(&videos).Error
+type VideoRecommendResponse struct {
+	Videos []VideoInfoResponse `json:"videos"`
+}
 
-	if err != nil {
+// GetVideoRecommend 获取用户视频推荐, v1: 查询前20条按照时间desc的视频
+func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
+	ctx := c.Request.Context()
+	var resp VideoRecommendResponse
+	ttl := recommendCacheTTL()
+	if _, err := getOrLoad(ctx, cacheKeyVideoRecommend, &resp, func(ctx context.Context) (any, bool, error) {
+		var videos []mVideo.Video
+		err := core.DB.Model(&mVideo.Video{}).
+			Where("status = ?", mVideo.VideoStatusPublished).
+			Where("visibility = ?", mVideo.VideoVisibilityPublic).
+			Order("created_at desc").
+			Limit(20).
+			Preload("CoverFile").
+			Find(&videos).Error
+		if err != nil {
+			return nil, false, err
+		}
+
+		authors := resolveAuthors(ctx, videos)
+
+		var respList []VideoInfoResponse
+		for _, video := range videos {
+			var coverURL string
+			if video.CoverFile != nil {
+				coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
+			}
+			respList = append(respList, VideoInfoResponse{
+				ID:          strconv.FormatInt(video.ID, 10),
+				Title:       video.Title,
+				Description: video.Description,
+				CoverURL:    coverURL,
+				Duration:    video.Duration,
+				Status:      string(video.Status),
+				Visibility:  string(video.Visibility),
+				CreatedAt:   video.CreatedAt,
+				UpdatedAt:   video.UpdatedAt,
+				User:        authors[video.UserID],
+			})
+		}
+		return VideoRecommendResponse{Videos: respList}, true, nil
+	}, cache.WithTTL(ttl, ttl)); err != nil {
 		core.Logger.Error("get recommend videos failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取推荐视频失败"})
 		return
 	}
 
-	// 批量查询作者信息（经 auth 服务）
-	authors := resolveAuthors(c.Request.Context(), videos)
-
-	var respList []VideoInfoResponse
-	for _, video := range videos {
-		var coverURL string
-		if video.CoverFile != nil {
-			coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
-		}
-
-		respList = append(respList, VideoInfoResponse{
-			ID:          strconv.FormatInt(video.ID, 10),
-			Title:       video.Title,
-			Description: video.Description,
-			CoverURL:    coverURL,
-			Duration:    video.Duration,
-			Status:      string(video.Status),
-			Visibility:  string(video.Visibility),
-			CreatedAt:   video.CreatedAt,
-			UpdatedAt:   video.UpdatedAt,
-			User:        authors[video.UserID],
-		})
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"videos": respList,
-	})
+	c.JSON(http.StatusOK, resp)
 }
