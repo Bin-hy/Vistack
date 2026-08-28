@@ -3,9 +3,10 @@ package config
 // AppConfig 定义应用配置结构（对接 conf/app.toml 的结构）
 type AppConfig struct {
 	Server struct {
-		Host string `mapstructure:"host"`
-		Port int    `mapstructure:"port"`
-		Mode string `mapstructure:"mode"` // debug/release/test
+		Host   string `mapstructure:"host"`
+		Port   int    `mapstructure:"port"`
+		Mode   string `mapstructure:"mode"`    // debug/release/test
+		WebDir string `mapstructure:"web_dir"` // 前端构建产物目录（api 托管静态页面；空 = 不托管）
 	} `mapstructure:"server"`
 
 	Logging struct {

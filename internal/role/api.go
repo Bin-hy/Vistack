@@ -118,6 +118,9 @@ func RunAPI(cfg *config.AppConfig) {
 	r := core.NewServer()
 	routers.RegisterRoutes(r, verifier, limiter)
 
+	// 托管前端构建产物（Docker 镜像内置 /app/web；本地可指向 ./build/web-client）
+	v1.RegisterWebStatic(r, cfg.Server.WebDir)
+
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{Addr: addr, Handler: r}
 

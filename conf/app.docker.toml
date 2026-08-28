@@ -22,6 +22,7 @@ conn_max_lifetime = 3600
 [server]
 port = 8080
 host = "0.0.0.0"
+web_dir = "/app/web" # 内置前端产物，Traefik 将页面请求代理到 api 托管
 
 [auth]
 kid = "vistack-rs256"

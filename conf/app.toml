@@ -19,6 +19,7 @@ conn_max_lifetime = 3600
 [server]
 port = 8080
 host = "0.0.0.0"
+# web_dir = "./build/web-client" # 本地托管前端产物时取消注释（需先 pnpm --filter web-client build）
 
 [auth]
 kid = "vistack-rs256" # JWT key id

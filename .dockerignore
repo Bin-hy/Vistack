@@ -4,7 +4,7 @@
 .gitignore
 docs/
 dsh-usage/
-web/
+# web/ 源码用于镜像内构建前端产物（node_modules/dist 由下方规则排除）
 **/node_modules/
 **/dist/
 *.log

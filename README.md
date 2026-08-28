@@ -172,7 +172,7 @@ cp .env.example .env.local
 docker compose up --build -d
 ```
 
-启动后包含 **api(8080) / auth(8081) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务，前端统一经 **Traefik**（:80）按路径分流。水平扩容转码：
+启动后包含 **api(8080) / auth(8081) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务，**打开 <http://localhost> 即用户端界面**（前端产物内置在 api 镜像中，Traefik 兜底路由代理）。水平扩容转码：
 
 ```bash
 docker compose up --scale transcoder=3 -d
