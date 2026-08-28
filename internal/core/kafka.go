@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/binhy/vistack/internal/config"
@@ -14,6 +15,9 @@ var KafkaWriter *kafka.Writer
 
 // KafkaConfig 保存 Kafka 配置以便复用（例如消费者需要 Brokers 和 GroupID）
 var KafkaConfig config.AppConfig
+
+// consumerWG 跟踪所有消费者 goroutine，供优雅停机排空
+var consumerWG sync.WaitGroup
 
 // InitKafka 初始化 Kafka 生产者
 func InitKafka(cfg *config.AppConfig) {
@@ -33,12 +37,7 @@ func InitKafka(cfg *config.AppConfig) {
 		// 生产环境建议配置超时
 		WriteTimeout: 10 * time.Second,
 		ReadTimeout:  10 * time.Second,
-		Async:        true, // 异步发送，提高吞吐量
-		Completion: func(messages []kafka.Message, err error) {
-			if err != nil && Logger != nil {
-				Logger.Error("Kafka async write failed", zap.Error(err))
-			}
-		},
+		Async:        false, // 同步发送，写失败可由调用方捕获处理
 	}
 
 	if Logger != nil {
@@ -93,8 +92,10 @@ func CloseKafka() {
 	}
 }
 
-// StartKafkaConsumer 启动一个 Kafka 消费者
-// handler 是处理消息的回调函数，返回 error 会记录日志（实际生产中可能需要重试机制）
+// StartKafkaConsumer 启动一个 Kafka 消费者：按配置并发度启动多个同 group reader。
+// 同一 partition 只会被组内一个 reader 持有，因此同 partition 消息仍顺序处理、顺序提交
+// （at-least-once 语义），并发上限 = min(concurrency, topic 分区数)。
+// handler 是处理消息的回调函数，返回 error 会记录日志（实际生产中可能需要重试机制）。
 func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx context.Context, key, value []byte) error) {
 	if len(KafkaConfig.Kafka.Brokers) == 0 {
 		if Logger != nil {
@@ -102,6 +103,21 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 		}
 		return
 	}
+
+	concurrency := KafkaConfig.Kafka.Concurrency
+	if concurrency <= 0 {
+		concurrency = 1
+	}
+
+	for i := 0; i < concurrency; i++ {
+		consumerWG.Add(1)
+		go runConsumer(ctx, topic, handler)
+	}
+}
+
+// runConsumer 单个 reader 的消费循环
+func runConsumer(ctx context.Context, topic string, handler func(ctx context.Context, key, value []byte) error) {
+	defer consumerWG.Done()
 
 	r := kafka.NewReader(kafka.ReaderConfig{
 		Brokers:        KafkaConfig.Kafka.Brokers,
@@ -111,6 +127,13 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 		MaxBytes:       10e6, // 10MB
 		CommitInterval: 0,
 	})
+	defer func() {
+		if err := r.Close(); err != nil {
+			if Logger != nil {
+				Logger.Error("Failed to close kafka reader", zap.String("topic", topic), zap.Error(err))
+			}
+		}
+	}()
 
 	if Logger != nil {
 		Logger.Info("Kafka consumer started",
@@ -119,62 +142,63 @@ func StartKafkaConsumer(ctx context.Context, topic string, handler func(ctx cont
 		)
 	}
 
-	go func() {
-		defer func() {
-			if err := r.Close(); err != nil {
-				if Logger != nil {
-					Logger.Error("Failed to close kafka reader", zap.String("topic", topic), zap.Error(err))
-				}
-			}
-		}()
-
-		for {
-			select {
-			case <-ctx.Done():
-				if Logger != nil {
-					Logger.Info("Stopping kafka consumer", zap.String("topic", topic))
-				}
+	for {
+		m, err := r.ReadMessage(ctx)
+		if err != nil {
+			// ctx 已取消是正常退出路径，直接返回；其他错误短暂等待后重试
+			if ctx.Err() != nil {
 				return
-			default:
-				m, err := r.ReadMessage(ctx)
-				if err != nil {
-					// 只有非 context canceled 错误才记录
-					if ctx.Err() == nil && Logger != nil {
-						Logger.Error("Failed to read kafka message", zap.String("topic", topic), zap.Error(err))
-					}
-					// 遇到错误稍微等待一下，避免死循环刷日志
-					time.Sleep(time.Second)
-					continue
-				}
-				if Logger != nil {
-					Logger.Debug("Received kafka message",
-						zap.String("topic", m.Topic),
-						zap.String("key", string(m.Key)),
-						zap.Int64("offset", m.Offset),
-					)
-				}
+			}
+			if Logger != nil {
+				Logger.Error("Failed to read kafka message", zap.String("topic", topic), zap.Error(err))
+			}
+			time.Sleep(time.Second)
+			continue
+		}
 
-				// 调用业务处理逻辑
-				if err := handler(ctx, m.Key, m.Value); err != nil {
-					if Logger != nil {
-						Logger.Error("Failed to handle kafka message",
-							zap.String("topic", topic),
-							zap.ByteString("key", m.Key),
-							zap.Error(err),
-						)
-					}
-				} else {
-					if err := r.CommitMessages(ctx, m); err != nil {
-						if Logger != nil {
-							Logger.Error("Failed to commit kafka message",
-								zap.String("topic", topic),
-								zap.ByteString("key", m.Key),
-								zap.Error(err),
-							)
-						}
-					}
+		if Logger != nil {
+			Logger.Debug("Received kafka message",
+				zap.String("topic", m.Topic),
+				zap.String("key", string(m.Key)),
+				zap.Int64("offset", m.Offset),
+			)
+		}
+
+		// 调用业务处理逻辑
+		if err := handler(ctx, m.Key, m.Value); err != nil {
+			if Logger != nil {
+				Logger.Error("Failed to handle kafka message",
+					zap.String("topic", topic),
+					zap.ByteString("key", m.Key),
+					zap.Error(err),
+				)
+			}
+		} else {
+			if err := r.CommitMessages(ctx, m); err != nil {
+				if Logger != nil {
+					Logger.Error("Failed to commit kafka message",
+						zap.String("topic", topic),
+						zap.ByteString("key", m.Key),
+						zap.Error(err),
+					)
 				}
 			}
 		}
+	}
+}
+
+// WaitKafkaConsumers 等待全部消费者 goroutine 退出（在途消息处理完成后才退出）；
+// 超时返回 false，供优雅停机判断是否强制退出。
+func WaitKafkaConsumers(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		consumerWG.Wait()
+		close(done)
 	}()
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
 }

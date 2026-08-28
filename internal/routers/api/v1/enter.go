@@ -1,8 +1,6 @@
 package v1
 
 type RouterGroup struct {
-	UserRouter
-	AuthRouter
 	FileRouter
 	VideoRouter
 }

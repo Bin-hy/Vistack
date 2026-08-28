@@ -1,0 +1,26 @@
+# Traefik 动态配置：统一入口按路径分流
+#   /api/v1/auth/*  → auth:8081（认证）
+#   /api/v1/user/*  → auth:8081（用户资料）
+#   其余 /api/v1/*  → api:8080（视频/文件业务）
+http:
+  routers:
+    auth-router:
+      entryPoints: ["web"]
+      rule: "PathPrefix(`/api/v1/auth`) || PathPrefix(`/api/v1/user`)"
+      service: auth-service
+      priority: 20
+    api-router:
+      entryPoints: ["web"]
+      rule: "PathPrefix(`/api/v1`)"
+      service: api-service
+      priority: 10
+
+  services:
+    auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://auth:8081"
+    api-service:
+      loadBalancer:
+        servers:
+          - url: "http://api:8080"

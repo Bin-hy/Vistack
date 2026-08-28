@@ -8,12 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// AuthMiddleware 校验 JWT 有效性，并将解析后的 claims 写入 Gin 上下文
-// 使用方式：在路由初始化时注入 TokenManager，例如：
-//
-//	tm := auth.NewTokenManager(secret, expireSeconds)
-//	r.Use(middlewares.AuthMiddleware(tm))
-func AuthMiddleware(tm *auth.TokenManager) gin.HandlerFunc {
+// AuthMiddleware 校验 JWT 有效性（JWKS 或私钥本地验签），并将解析后的 claims 写入 Gin 上下文。
+// 注入 TokenValidator 接口：api 用 TokenVerifier（JWKS），auth 服务内部用 TokenManager（私钥）。
+func AuthMiddleware(v auth.TokenValidator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1) 获取 Authorization 头
 		raw := c.GetHeader("Authorization")
@@ -36,7 +33,7 @@ func AuthMiddleware(tm *auth.TokenManager) gin.HandlerFunc {
 		}
 
 		// 3) 验证 token 并获取 claims
-		claims, err := tm.ValidateToken(token)
+		claims, err := v.ValidateToken(token)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "未授权", "details": err.Error()})
 			c.Abort()

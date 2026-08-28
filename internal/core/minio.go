@@ -20,7 +20,9 @@ var MinioPublicEndpoint string
 // InitMinioClient 初始化 MinIO 客户端
 func InitMinioClient(cfg *config.AppConfig) {
 	minioConfig := cfg.MinIO
-	fmt.Printf("OnInitMinioClient, minioConfig: %+v\n", minioConfig)
+	if Logger != nil {
+		Logger.Info("MinIO client initializing", zap.String("endpoint", minioConfig.Endpoint))
+	}
 	if minioConfig.Endpoint == "" {
 		if Logger != nil {
 			Logger.Error("MinIO endpoint is not configured")
@@ -54,6 +56,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 	client, err := minio.New(internalEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
 		Secure: internalSecure,
+		Region: "us-east-1", // MinIO 默认 region，避免 Presign/操作时额外发起 ?location 探测
 	})
 	if Logger != nil {
 		Logger.Info("MinIO Client Initialized", zap.String("endpoint", client.EndpointURL().String()))
@@ -71,6 +74,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 	coreClient, err := minio.NewCore(internalEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
 		Secure: internalSecure,
+		Region: "us-east-1",
 	})
 	if err != nil {
 		if Logger != nil {
@@ -91,6 +95,7 @@ func InitMinioClient(cfg *config.AppConfig) {
 	publicCoreClient, err := minio.NewCore(publicEndpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(minioConfig.AccessKey, minioConfig.SecretKey, ""),
 		Secure: publicSecure,
+		Region: "us-east-1",
 	})
 	if err != nil {
 		if Logger != nil {
@@ -219,7 +224,6 @@ func GetInternalBaseURL() string {
 		return ""
 	}
 	u := Minio.EndpointURL()
-	fmt.Printf("Internal")
 
 	return u.String()
 }

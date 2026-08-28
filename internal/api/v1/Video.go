@@ -151,7 +151,18 @@ func (v *VideoApi) InitVideoUpload(c *gin.Context) {
 			ObjectKey:   existingFile.ObjectKey,
 		}
 		msgBytes, _ := json.Marshal(msg)
-		_ = core.SendKafkaMessage(context.Background(), "transcode", strconv.FormatInt(video.ID, 10), msgBytes)
+		if err := core.SendKafkaMessage(context.Background(), string(consts.KafkaTopicTranscode), strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
+			core.Logger.Error("send kafka message failed", zap.Error(err))
+			_ = core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", transcodeTask.ID).Update("status", mVideo.TranscodeStatusFailed)
+			_ = transcode.AddTranscodeRetry(context.Background(), transcode.TranscodeRetryMessage{
+				VideoID:     video.ID,
+				TranscodeID: transcodeTask.ID,
+				ObjectKey:   existingFile.ObjectKey,
+				Attempt:     1,
+			})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "转码任务投递失败，请重试"})
+			return
+		}
 
 		c.JSON(http.StatusOK, VideoInitResponse{
 			Uploaded: true,
@@ -400,8 +411,17 @@ func (v *VideoApi) CompleteVideoUpload(c *gin.Context) {
 
 	// 使用 "transcode" 作为 Topic
 	if err := core.SendKafkaMessage(context.Background(), string(consts.KafkaTopicTranscode), strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
-		// 发送失败不回滚数据库，可以由定时任务补救
+		// 投递失败：标记转码失败并进入重试队列，避免任务永久 pending
 		core.Logger.Error("send kafka message failed", zap.Error(err))
+		_ = core.DB.Model(&mVideo.VideoTranscode{}).Where("id = ?", transcodeTask.ID).Update("status", mVideo.TranscodeStatusFailed)
+		_ = transcode.AddTranscodeRetry(context.Background(), transcode.TranscodeRetryMessage{
+			VideoID:     video.ID,
+			TranscodeID: transcodeTask.ID,
+			ObjectKey:   req.ObjectKey,
+			Attempt:     1,
+		})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "转码任务投递失败，请重试"})
+		return
 	}
 
 	// Clear upload session
@@ -445,69 +465,22 @@ func (v *VideoApi) DeleteVideo(c *gin.Context) {
 		return
 	}
 
-	// 2. 软删除逻辑 (Soft Delete + RefCount)
-	tx := core.DB.Begin()
-
-	// 2.1 标记 UserVideo 为 deleted
-	// 注意：这里不直接删除记录，而是更新状态，以便后续异步清理转码产物
-	if err := tx.Model(&video).Update("status", mVideo.VideoStatusDeleted).Error; err != nil {
-		tx.Rollback()
+	// 2. 软删除：只标记状态，物理清理与引用计数交由 delete worker 处理
+	if err := core.DB.Model(&video).Update("status", mVideo.VideoStatusDeleted).Error; err != nil {
 		core.Logger.Error("update video status failed", zap.Error(err))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
 		return
 	}
 
-	// 2.2 处理引用计数
-	var sources []mVideo.VideoSource
-	if err := tx.Where("video_id = ?", video.ID).Find(&sources).Error; err != nil {
-		tx.Rollback()
-		core.Logger.Error("find sources failed", zap.Error(err))
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-		return
-	}
-
-	for _, s := range sources {
-		// 减少 File 引用计数
-		// UPDATE files SET ref_count = ref_count - 1 WHERE id = ?
-		if err := tx.Model(&mFile.File{}).Where("id = ?", s.FileID).
-			UpdateColumn("ref_count", gorm.Expr("ref_count - ?", 1)).Error; err != nil {
-			tx.Rollback()
-			core.Logger.Error("decrease ref_count failed", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-			return
-		}
-
-		// 检查引用计数是否归零
-		var file mFile.File
-		if err := tx.First(&file, s.FileID).Error; err != nil {
-			tx.Rollback()
-			core.Logger.Error("find file failed", zap.Error(err))
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-			return
-		}
-
-		if file.RefCount <= 0 {
-			// 标记物理文件为待删除 (deleting)
-			// GC 任务会扫描此状态并执行物理删除
-			if err := tx.Model(&file).Update("status", mFile.FileStatusDeleting).Error; err != nil {
-				tx.Rollback()
-				core.Logger.Error("mark file deleting failed", zap.Error(err))
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Database error"})
-				return
-			}
-		}
-	}
-
-	tx.Commit()
-
-	// 3. 触发异步清理任务
-	// 这里可以发送一个 Kafka 消息通知 "VideoDeleted"，让消费者去清理 dash/{video_id}
+	// 3. 触发异步清理任务（消费者负责清理 dash/{video_id} 与引用计数）
 	msg := mq_video.VideoDeleteMessage{
 		VideoID: video.ID,
 	}
 	msgBytes, _ := json.Marshal(msg)
 	if err := core.SendKafkaMessage(context.Background(), string(consts.KafkaTopicDeleteFile), strconv.FormatInt(video.ID, 10), msgBytes); err != nil {
-		core.Logger.Error("send kafka message failed", zap.Error(err))
+		core.Logger.Error("send delete kafka message failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除任务投递失败，请重试"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"msg": "success"})
@@ -552,7 +525,7 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 	}
 
 	var video mVideo.Video
-	if err := core.DB.Preload("CoverFile").Preload("User.Profile.Avatar").First(&video, videoID).Error; err != nil {
+	if err := core.DB.Preload("CoverFile").First(&video, videoID).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Video not found"})
 		return
 	}
@@ -562,24 +535,7 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 		coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
 	}
 
-	var author *VideoAuthorResponse
-	if video.User != nil {
-		nickname := video.User.Username
-		if video.User.Profile != nil && video.User.Profile.Nickname != nil && *video.User.Profile.Nickname != "" {
-			nickname = *video.User.Profile.Nickname
-		}
-
-		var avatarURL string
-		if video.User.Profile != nil && video.User.Profile.Avatar != nil {
-			avatarURL = video.User.Profile.Avatar.PublicURL(core.GetPublicBaseURL())
-		}
-		fmt.Println("avatarURL:", avatarURL)
-		author = &VideoAuthorResponse{
-			ID:        strconv.FormatInt(video.User.ID, 10),
-			Nickname:  nickname,
-			AvatarURL: avatarURL,
-		}
-	}
+	author := resolveAuthor(c.Request.Context(), video.UserID)
 
 	resp := VideoInfoResponse{
 		ID:          strconv.FormatInt(video.ID, 10),
@@ -929,9 +885,6 @@ func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
 		Order("created_at desc").
 		Limit(20).
 		Preload("CoverFile").
-		Preload("User").
-		Preload("User.Profile").
-		Preload("User.Profile.Avatar").
 		Find(&videos).Error
 
 	if err != nil {
@@ -940,29 +893,14 @@ func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
 		return
 	}
 
+	// 批量查询作者信息（经 auth 服务）
+	authors := resolveAuthors(c.Request.Context(), videos)
+
 	var respList []VideoInfoResponse
 	for _, video := range videos {
 		var coverURL string
 		if video.CoverFile != nil {
 			coverURL = video.CoverFile.PublicURL(core.GetPublicBaseURL())
-		}
-
-		var author *VideoAuthorResponse
-		if video.User != nil {
-			nickname := video.User.Username
-			if video.User.Profile != nil && video.User.Profile.Nickname != nil && *video.User.Profile.Nickname != "" {
-				nickname = *video.User.Profile.Nickname
-			}
-
-			var avatarURL string
-			if video.User.Profile != nil && video.User.Profile.Avatar != nil {
-				avatarURL = video.User.Profile.Avatar.PublicURL(core.GetPublicBaseURL())
-			}
-			author = &VideoAuthorResponse{
-				ID:        strconv.FormatInt(video.User.ID, 10),
-				Nickname:  nickname,
-				AvatarURL: avatarURL,
-			}
 		}
 
 		respList = append(respList, VideoInfoResponse{
@@ -975,7 +913,7 @@ func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
 			Visibility:  string(video.Visibility),
 			CreatedAt:   video.CreatedAt,
 			UpdatedAt:   video.UpdatedAt,
-			User:        author,
+			User:        authors[video.UserID],
 		})
 	}
 

@@ -1,5 +1,3 @@
-# syntax=docker/dockerfile:1.6
-
 # ===== 构建阶段 =====
 FROM golang:1.26-alpine AS build
 RUN apk add --no-cache git ca-certificates
@@ -7,6 +5,8 @@ WORKDIR /app
 
 # 先缓存依赖
 COPY go.mod go.sum ./
+ARG GOPROXY=https://goproxy.cn,direct
+ENV GOPROXY=${GOPROXY}
 RUN --mount=type=cache,target=/root/.cache/go-build go mod download
 
 # 拷贝源码并构建

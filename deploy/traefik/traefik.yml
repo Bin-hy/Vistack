@@ -1,0 +1,17 @@
+# Traefik 静态配置（入口 + provider）
+entryPoints:
+  web:
+    address: ":80"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+# 仪表盘（开发环境 insecure 暴露；生产请移除或加认证）
+api:
+  insecure: true
+  dashboard: true
+
+log:
+  level: INFO

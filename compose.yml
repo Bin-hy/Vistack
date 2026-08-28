@@ -92,7 +92,30 @@ services:
         condition: service_started
       kafka:
         condition: service_started
+      auth:
+        condition: service_started
     command: ["api"]
+
+  auth:
+    build:
+      context: .
+      target: vistack
+    image: vistack:latest
+    container_name: vistack-auth
+    environment:
+      VISTACK_CONFIG_PATH: /app/conf/app.docker.toml
+      # 生产环境通过 VISTACK_AUTH_RSA_PRIVATE_KEY 注入私钥；开发环境自动生成临时密钥
+    ports:
+      - "8081:8081"
+      - "50052:50052"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      etcd:
+        condition: service_started
+    command: ["auth"]
 
   worker:
     build:
@@ -129,6 +152,22 @@ services:
         condition: service_started
     command: ["transcoder"]
     # 水平扩容：docker compose up --scale transcoder=3
+
+  # 统一入口网关：按路径分流 /api/v1/auth|user → auth，其余 /api/v1 → api
+  traefik:
+    image: traefik:v3.3
+    container_name: vistack-traefik
+    ports:
+      - "80:80"      # 统一入口（前端指向 http://localhost/api/v1）
+      - "8082:8080"  # 仪表盘 http://localhost:8082/dashboard/
+    volumes:
+      - ./deploy/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./deploy/traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    depends_on:
+      - auth
+      - api
 
 volumes:
   pgdata:

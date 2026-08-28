@@ -36,9 +36,17 @@ type AppConfig struct {
 	} `mapstructure:"minio"`
 
 	Auth struct {
-		JWTSecret     string `mapstructure:"jwt_secret"`
+		Kid           string `mapstructure:"kid"`            // JWT key id，默认 vistack-rs256
+		Issuer        string `mapstructure:"issuer"`         // JWT issuer，默认 vistack
 		JWTExpiration int    `mapstructure:"jwt_expiration"` // 秒
+		JWKSPath      string `mapstructure:"jwks_path"`      // JWKS 端点路径，默认 /.well-known/jwks.json
 	} `mapstructure:"auth"`
+
+	AuthService struct {
+		HTTPAddr string `mapstructure:"http_addr"` // auth 对外 HTTP 地址，默认 :8081
+		GRPCAddr string `mapstructure:"grpc_addr"` // auth 对内 gRPC 地址，默认 :50052
+		JWKSURL  string `mapstructure:"jwks_url"`  // api 拉取 JWKS 的完整 URL，默认 http://127.0.0.1:8081/.well-known/jwks.json
+	} `mapstructure:"auth_service"`
 
 	Redis struct {
 		Host     string `mapstructure:"host"`
@@ -53,8 +61,9 @@ type AppConfig struct {
 	} `mapstructure:"snowflake"`
 
 	Kafka struct {
-		Brokers []string `mapstructure:"brokers"`
-		GroupID string   `mapstructure:"group_id"`
+		Brokers     []string `mapstructure:"brokers"`
+		GroupID     string   `mapstructure:"group_id"`
+		Concurrency int      `mapstructure:"concurrency"` // 每个实例并发消费者数，默认 4
 	} `mapstructure:"kafka"`
 
 	Cors struct {
@@ -68,6 +77,7 @@ type AppConfig struct {
 	Etcd struct {
 		Endpoints []string `mapstructure:"endpoints"` // 如 ["localhost:2379"]
 		Prefix    string   `mapstructure:"prefix"`    // 注册前缀，默认 /vistack/transcoders
+		LeaderTTL int      `mapstructure:"leader_ttl"` // 领导选举租约 TTL 秒，默认 10
 	} `mapstructure:"etcd"`
 
 	Transcoder struct {
@@ -78,3 +88,6 @@ type AppConfig struct {
 }
 
 const DefaultConfigPath = "conf/app.local.toml"
+
+// DefaultAuthPrefix auth 服务在 etcd 中的注册/发现前缀（注册方与发现方共用，须一致）。
+const DefaultAuthPrefix = "/vistack/auth"

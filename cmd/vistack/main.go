@@ -19,6 +19,8 @@ func main() {
 	core.InitLogger(&cfg)
 	defer core.SyncLogger()
 
+	core.ValidateConfig(&cfg)
+
 	switch roleName {
 	case "api":
 		role.RunAPI(&cfg)
@@ -26,8 +28,12 @@ func main() {
 		role.RunWorker(&cfg)
 	case "transcoder":
 		role.RunTranscoder(&cfg)
+	case "auth":
+		role.RunAuth(&cfg)
+	case "migrate":
+		role.RunMigrate(&cfg)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown role %q (expected api|worker|transcoder)\n", roleName)
+		fmt.Fprintf(os.Stderr, "unknown role %q (expected api|worker|transcoder|auth|migrate)\n", roleName)
 		os.Exit(1)
 	}
 }

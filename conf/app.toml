@@ -21,8 +21,10 @@ port = 8080
 host = "0.0.0.0"
 
 [auth]
-jwt_secret = "secret"
+kid = "vistack-rs256" # JWT key id
+issuer = "vistack"
 jwt_expiration = 3600
+jwks_path = "/.well-known/jwks.json"
 
 [redis]
 host = "127.0.0.1"
@@ -32,15 +34,16 @@ password = ""
 pool_size = 10
 
 [snowflake]
-node_id = 1
+node_id = 0 # 0 = 自动从实例标识(hostname/POD_IP)派生，多副本避免 ID 冲突
 
 [kafka]
 brokers = ["localhost:9092"]
 group_id = "vistack-consumer-group"
+concurrency = 4 # 每个 worker 实例的并发消费者数，默认 4
 
 [cors]
 enable = true
-allow_origins = ["http://localhost:8335", "http://localhost:8336"]
+allow_origins = ["http://localhost:8334", "http://localhost:8335"]
 allow_methods = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 allow_headers = ["Content-Type", "Authorization", "X-Requested-With"]
 allow_credentials = true
@@ -48,8 +51,14 @@ allow_credentials = true
 [etcd]
 endpoints = ["localhost:2379"]
 prefix = "/vistack/transcoders"
+leader_ttl = 10 # 领导选举租约 TTL 秒，默认 10
 
 [transcoder]
 listen_addr = ":50051"
 addr = "localhost:50051"
 use_etcd = true
+
+[auth_service]
+http_addr = ":8081"
+grpc_addr = ":50052"
+jwks_url = "http://127.0.0.1:8081/.well-known/jwks.json"

@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package auth.v1;
+
+option go_package = "github.com/binhy/vistack/internal/auth/pb/auth/v1;authpb";
+
+// UserService 提供用户公开信息的批量查询，供业务服务（api）在展示作者等场景调用。
+service UserService {
+  // GetUserInfos 按 user_id 列表批量返回用户公开信息。
+  rpc GetUserInfos(GetUserInfosRequest) returns (GetUserInfosResponse);
+}
+
+message GetUserInfosRequest {
+  repeated int64 user_ids = 1;
+}
+
+message UserInfo {
+  int64  id         = 1;
+  string username   = 2;
+  string nickname   = 3;
+  string avatar_url = 4;
+  string role       = 5;
+}
+
+message GetUserInfosResponse {
+  repeated UserInfo users = 1;
+}
