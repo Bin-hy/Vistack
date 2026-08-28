@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	mDanmaku "github.com/binhy/vistack/internal/model/entity/danmaku"
 	mFile "github.com/binhy/vistack/internal/model/entity/file"
 	mSocial "github.com/binhy/vistack/internal/model/entity/social"
 	mTag "github.com/binhy/vistack/internal/model/entity/tag"
@@ -48,6 +49,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&mSocial.VideoLike{},
 		&mSocial.VideoFavorite{},
 		&mSocial.VideoPlayLog{},
+
+		// 弹幕
+		&mDanmaku.Danmaku{},
+		&mDanmaku.SensitiveWord{},
 
 		// 审计日志
 		// &mAudit.AuditLog{},

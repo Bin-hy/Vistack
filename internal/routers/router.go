@@ -24,6 +24,7 @@ func RegisterRoutes(r *gin.Engine, validator authpkg.TokenValidator, limiter rat
 	{
 		v1.RouterGroupApp.InitVideoPublicRouter(PublicApiGroup)
 		v1.RouterGroupApp.InitSocialPublicRouter(PublicApiGroup)
+		v1.RouterGroupApp.InitDanmakuPublicRouter(PublicApiGroup)
 	}
 
 	// API v1 路由组, 需要认证路由
@@ -34,5 +35,6 @@ func RegisterRoutes(r *gin.Engine, validator authpkg.TokenValidator, limiter rat
 		v1.RouterGroupApp.InitFileRouter(AuthApiGroup)
 		v1.RouterGroupApp.InitVideoPrivatesRouter(AuthApiGroup)
 		v1.RouterGroupApp.InitSocialPrivatesRouter(AuthApiGroup)
+		v1.RouterGroupApp.InitDanmakuPrivatesRouter(AuthApiGroup)
 	}
 }

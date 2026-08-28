@@ -88,6 +88,14 @@ type AppConfig struct {
 		LeaderboardSize int  `mapstructure:"leaderboard_size"` // 榜单容量
 	} `mapstructure:"social"`
 
+	// danmaku: 点播弹幕（Redis ZSet 缓存 + Kafka 落库 + AC 敏感词）
+	Danmaku struct {
+		Enabled            bool `mapstructure:"enabled"`
+		LocalCacheSize     int  `mapstructure:"local_cache_size"`
+		LocalCacheTTL      int  `mapstructure:"local_cache_ttl"`       // 秒
+		CacheControlMaxAge int  `mapstructure:"cache_control_max_age"` // 秒
+	} `mapstructure:"danmaku"`
+
 	Snowflake struct {
 		NodeID int64 `mapstructure:"node_id"`
 	} `mapstructure:"snowflake"`

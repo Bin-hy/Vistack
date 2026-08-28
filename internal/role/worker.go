@@ -11,6 +11,7 @@ import (
 	"github.com/binhy/vistack/internal/config"
 	"github.com/binhy/vistack/internal/core"
 	"github.com/binhy/vistack/internal/core/leader"
+	mq_danmaku "github.com/binhy/vistack/internal/core/message_queue/danmaku"
 	mq_transcode "github.com/binhy/vistack/internal/core/message_queue/transcode"
 	mq_video "github.com/binhy/vistack/internal/core/message_queue/video"
 	"github.com/binhy/vistack/internal/global"
@@ -49,6 +50,7 @@ func RunWorker(cfg *config.AppConfig) {
 	// 常规消费者（并发消费，见 core.StartKafkaConsumer）
 	mq_transcode.StartTranscodeWorker(ctx)
 	mq_video.StartVideoDeleteWorker(ctx)
+	mq_danmaku.StartDanmakuWorker(ctx)
 
 	// 单例任务：etcd 领导选举，仅 leader 运行 dispatcher + watchdog
 	runSingletonJobs(ctx)

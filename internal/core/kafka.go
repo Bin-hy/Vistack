@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -90,6 +91,29 @@ func CloseKafka() {
 			}
 		}
 	}
+}
+
+// EnsureTopic 确保 Kafka topic 存在（不存在则创建，1 分区 1 副本）。
+// 用于避免消费者在 topic 尚未创建时订阅、生产者首次写入失败。
+func EnsureTopic(topic string) error {
+	if len(KafkaConfig.Kafka.Brokers) == 0 {
+		return nil
+	}
+	conn, err := kafka.Dial("tcp", KafkaConfig.Kafka.Brokers[0])
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	err = conn.CreateTopics(kafka.TopicConfig{
+		Topic:             topic,
+		NumPartitions:     1,
+		ReplicationFactor: 1,
+	})
+	if err != nil && !strings.Contains(err.Error(), "already exists") {
+		return err
+	}
+	return nil
 }
 
 // StartKafkaConsumer 启动一个 Kafka 消费者：按配置并发度启动多个同 group reader。

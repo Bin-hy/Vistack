@@ -14,7 +14,9 @@ import (
 	v1 "github.com/binhy/vistack/internal/api/v1"
 	"github.com/binhy/vistack/internal/authclient"
 	"github.com/binhy/vistack/internal/config"
+	"github.com/binhy/vistack/internal/consts"
 	"github.com/binhy/vistack/internal/core"
+	"github.com/binhy/vistack/internal/danmaku"
 	"github.com/binhy/vistack/internal/interaction"
 	"github.com/binhy/vistack/internal/middlewares"
 	"github.com/binhy/vistack/internal/routers"
@@ -60,6 +62,10 @@ func RunAPI(cfg *config.AppConfig) {
 	core.InitKafka(cfg)
 	defer core.CloseKafka()
 
+	if err := core.EnsureTopic(string(consts.KafkaTopicDanmaku)); err != nil {
+		core.Logger.Error("ensure danmaku topic failed", zap.Error(err))
+	}
+
 	// 异步全量构建视频布隆过滤器（best-effort，失败仅记日志）
 	go v1.BuildVideoBloom(context.Background())
 
@@ -84,6 +90,17 @@ func RunAPI(cfg *config.AppConfig) {
 		})
 		v1.SetInteractionService(svc)
 		svc.StartFlusher(ctx)
+	}
+
+	if cfg.Danmaku.Enabled {
+		dsvc := danmaku.NewService(core.Redis, core.DB, danmaku.Options{
+			LocalCacheSize:     cfg.Danmaku.LocalCacheSize,
+			LocalCacheTTL:      time.Duration(cfg.Danmaku.LocalCacheTTL) * time.Second,
+			CacheControlMaxAge: cfg.Danmaku.CacheControlMaxAge,
+			Logger:             core.Logger,
+		})
+		v1.SetDanmakuService(dsvc)
+		_ = dsvc.LoadSensitiveWords(ctx)
 	}
 
 	r := core.NewServer()
