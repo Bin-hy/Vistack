@@ -14,6 +14,7 @@ const router = useRouter()
 					<span class="gradient-text text-lg font-bold">Vistack Admin</span>
 				</div>
 				<div class="flex items-center gap-3">
+					<UiButton variant="ghost" size="sm" @click="router.push('/sensitive-words')">违禁词管理</UiButton>
 					<UiButton variant="ghost" size="sm" @click="router.push('/login')">登录</UiButton>
 					<UiButton variant="outline" size="sm" @click="router.push('/register')">注册</UiButton>
 				</div>

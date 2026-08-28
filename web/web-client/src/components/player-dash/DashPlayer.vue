@@ -9,6 +9,12 @@ import FullscreenBtn from './controls/FullscreenBtn.vue'
 import QualitySelector from './controls/QualitySelector.vue'
 import { useDashPlayer } from './useDashPlayer'
 
+export interface DanmakuItem {
+	time_offset: number
+	content: string
+	color?: string
+}
+
 const props = withDefaults(defineProps<{
 	src: string
 	autoplay?: boolean
@@ -16,12 +22,14 @@ const props = withDefaults(defineProps<{
 	preload?: 'auto' | 'metadata' | 'none'
 	segmentsBaseUrl?: string
 	segmentsCredentials?: VideoSegmentsSignatureCredentials | null
+	danmakus?: DanmakuItem[]
 }>(), {
 	autoplay: false,
 	muted: false,
 	preload: 'metadata',
 	segmentsBaseUrl: '',
 	segmentsCredentials: null,
+	danmakus: () => [],
 })
 
 const srcRef = ref(props.src)
@@ -73,7 +81,7 @@ const showRateMenu = ref(false)
 const displayPlaybackRate = computed(() => (speedHoldActive.value ? 1.5 : playbackRate.value))
 
 const emit = defineEmits<{
-	(e: 'send-danmaku', text: string): void
+	(e: 'send-danmaku', text: string, timeOffset: number): void
 }>()
 
 function formatTime(value: number) {
@@ -107,18 +115,42 @@ function handleFullscreenChange() {
 	isFullscreen.value = !!document.fullscreenElement
 }
 
-function handleSendDanmaku() {
-	const text = danmakuText.value.trim()
-	if (!text) return
+function pushDanmaku(text: string, color?: string) {
 	const track = danmakuId % danmakuTrackCount
-	const color = danmakuColors[danmakuId % danmakuColors.length] || '#FFFFFF'
-	danmakuList.value.push({ id: danmakuId++, text, track, color })
+	const c = color || danmakuColors[danmakuId % danmakuColors.length] || '#FFFFFF'
+	danmakuList.value.push({ id: danmakuId++, text, track, color: c })
 	if (danmakuList.value.length > 100) {
 		danmakuList.value.shift()
 	}
-	danmakuText.value = ''
-	emit('send-danmaku', text)
 }
+
+function handleSendDanmaku() {
+	const text = danmakuText.value.trim()
+	if (!text) return
+	pushDanmaku(text)
+	danmakuText.value = ''
+	emit('send-danmaku', text, currentTime.value)
+}
+
+// 按时间轴渲染历史弹幕：播放到某弹幕的 time_offset 时将其加入滚动队列
+const sortedDanmakus = computed(() => [...(props.danmakus || [])].sort((a, b) => a.time_offset - b.time_offset))
+let danmakuCursor = 0
+let prevCurrentTime = 0
+watch(currentTime, (t) => {
+	if (t < prevCurrentTime - 1) {
+		// 回退 seek：重置游标与已渲染弹幕，重新按时间轴渲染
+		danmakuCursor = 0
+		danmakuList.value = []
+	}
+	prevCurrentTime = t
+	const list = sortedDanmakus.value
+	while (danmakuCursor < list.length) {
+		const d = list[danmakuCursor]
+		if (!d || d.time_offset > t) break
+		pushDanmaku(d.content, d.color)
+		danmakuCursor++
+	}
+})
 
 function handleVideoClick() {
 	if (clickTimer !== null) return

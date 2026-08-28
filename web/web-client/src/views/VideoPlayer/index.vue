@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
-import DashPlayer from '@/components/player-dash/DashPlayer.vue'
+import DashPlayer, { type DanmakuItem } from '@/components/player-dash/DashPlayer.vue'
 import { UiIcon } from '@/components/ui'
 import { baseURL, get, post } from '@/lib/http'
 import { formatCount } from '@/lib/format'
@@ -99,6 +99,32 @@ async function loadSignature(id: string) {
 async function loadVideoInfo(id: string) {
 	const resp = await get<VideoInfo>(`/videos/${id}/info`)
 	videoInfo.value = resp
+	loadDanmaku(id, resp.duration || 300)
+}
+
+const danmakus = ref<DanmakuItem[]>([])
+
+async function loadDanmaku(id: string, duration: number) {
+	try {
+		const end = Math.max(60, Math.ceil(duration || 0))
+		const resp = await get<{ danmaku: DanmakuItem[] }>(`/videos/${id}/danmaku?start=0&end=${end}`)
+		danmakus.value = resp.danmaku || []
+	} catch {
+		danmakus.value = []
+	}
+}
+
+async function handleSendDanmaku(text: string, timeOffset: number) {
+	if (!videoId.value) return
+	if (!userStore.isLoggedIn) {
+		toast({ title: '请先登录', type: 'error' })
+		return
+	}
+	try {
+		await post(`/videos/${videoId.value}/danmaku`, { content: text, time_offset: timeOffset })
+	} catch (e: any) {
+		toast({ title: e?.message ?? '发送失败', type: 'error' })
+	}
 }
 
 async function loadRelated() {
@@ -238,6 +264,8 @@ onBeforeUnmount(() => {
 						:autoplay="true"
 						:segments-base-url="segmentsBaseUrl"
 						:segments-credentials="segmentsCredentials"
+						:danmakus="danmakus"
+						@send-danmaku="handleSendDanmaku"
 					/>
 				</div>
 

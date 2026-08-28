@@ -7,6 +7,12 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/Index/index.vue'),
     meta: { layout: 'bili' },
   },
+  {
+    path: '/sensitive-words',
+    name: 'sensitive-words',
+    component: () => import('@/views/SensitiveWords/index.vue'),
+    meta: { layout: 'bili' },
+  },
   // 移除示例关于页路由
   {
     path: '/login',
