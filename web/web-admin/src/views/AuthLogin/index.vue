@@ -7,21 +7,21 @@ import { login as apiLogin } from './api/api'
 import { setToken } from '@/lib/http'
 
 const router = useRouter()
-const account = ref('')
+const username = ref('')
 const password = ref('')
 const remember = ref(true)
 const loading = ref(false)
 
 async function onLogin() {
-  if (!account.value || !password.value) {
-    toast({ title: '请输入账号和密码', type: 'error' })
+  if (!username.value || !password.value) {
+    toast({ title: '请输入用户名和密码', type: 'error' })
     return
   }
   loading.value = true
   try {
-    const res = await apiLogin({ account: account.value, password: password.value })
+    const res = await apiLogin({ username: username.value, password: password.value })
     setToken(res.token)
-    toast({ title: `登录成功，欢迎 ${res.user.nickname ?? res.user.account}`, type: 'success' })
+    toast({ title: `登录成功，欢迎 ${res.user.nickname ?? res.user.username}`, type: 'success' })
     router.push('/')
   } catch (e: any) {
     toast({ title: e?.message ?? '登录失败，请稍后重试', type: 'error' })
@@ -46,12 +46,12 @@ async function onLogin() {
       <!-- 右侧登录表单 -->
       <div class="glass rounded-xl p-8 shadow-lg">
         <h1 class="text-2xl font-bold">登录</h1>
-        <p class="mb-6 mt-1 text-sm text-muted-foreground">使用手机号/邮箱登录你的账户</p>
+        <p class="mb-6 mt-1 text-sm text-muted-foreground">使用用户名和密码登录</p>
 
         <div class="space-y-4">
           <div class="flex items-center gap-4">
-            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">账号</label>
-            <UiInput v-model="account" type="text" placeholder="手机号 / 邮箱" class="flex-1" />
+            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">用户名</label>
+            <UiInput v-model="username" type="text" placeholder="请输入用户名" class="flex-1" />
           </div>
           <div class="flex items-center gap-4">
             <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">密码</label>

@@ -1,15 +1,15 @@
 import { post } from '@/lib/http'
 
 export interface LoginPayload {
-  account: string
+  username: string
   password: string
 }
 
 export interface User {
   id: string | number
-  account: string
+  username: string
   nickname?: string
-  avatar?: string
+  avatar_url?: string
 }
 
 export interface LoginResult {

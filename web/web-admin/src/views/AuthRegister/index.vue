@@ -6,7 +6,7 @@ import { toast } from '@/components/ui/toast/useToast'
 import { register as apiRegister } from './api/api'
 
 const router = useRouter()
-const account = ref('')
+const username = ref('')
 const password = ref('')
 const confirm = ref('')
 const agree = ref(true)
@@ -17,8 +17,8 @@ async function onRegister() {
     toast({ title: '请先同意用户协议与隐私政策', type: 'error' })
     return
   }
-  if (!account.value || !password.value) {
-    toast({ title: '请输入账号和密码', type: 'error' })
+  if (!username.value || !password.value) {
+    toast({ title: '请输入用户名和密码', type: 'error' })
     return
   }
   if (password.value !== confirm.value) {
@@ -27,8 +27,8 @@ async function onRegister() {
   }
   loading.value = true
   try {
-    const res = await apiRegister({ account: account.value, password: password.value })
-    toast({ title: `注册成功，欢迎 ${res.user.nickname ?? res.user.account}`, type: 'success' })
+    const res = await apiRegister({ username: username.value, password: password.value })
+    toast({ title: `注册成功，用户ID：${res.user_id}`, type: 'success' })
     router.push('/login')
   } catch (e: any) {
     toast({ title: e?.message ?? '注册失败，请稍后重试', type: 'error' })
@@ -53,12 +53,12 @@ async function onRegister() {
       <!-- 右侧注册表单 -->
       <div class="glass rounded-xl p-8 shadow-lg">
         <h1 class="text-2xl font-bold">注册</h1>
-        <p class="mb-6 mt-1 text-sm text-muted-foreground">使用手机号/邮箱创建你的账户</p>
+        <p class="mb-6 mt-1 text-sm text-muted-foreground">使用用户名和密码创建账户</p>
 
         <div class="space-y-4">
           <div class="flex items-center gap-4">
-            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">账号</label>
-            <UiInput v-model="account" type="text" placeholder="手机号 / 邮箱" class="flex-1" />
+            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">用户名</label>
+            <UiInput v-model="username" type="text" placeholder="请输入用户名" class="flex-1" />
           </div>
           <div class="flex items-center gap-4">
             <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">密码</label>
