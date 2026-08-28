@@ -40,6 +40,11 @@ type Video struct {
 	CreatedAt   time.Time       `gorm:"column:created_at" json:"created_at"`
 	UpdatedAt   time.Time       `gorm:"column:updated_at" json:"updated_at"`
 
+	// 冗余计数列（Redis 实时计数，异步落库同步）
+	LikeCount     int64 `gorm:"default:0;column:like_count" json:"like_count"`
+	FavoriteCount int64 `gorm:"default:0;column:favorite_count" json:"favorite_count"`
+	PlayCount     int64 `gorm:"default:0;column:play_count" json:"play_count"`
+
 	// 关联
 	User       *user.User       `gorm:"foreignKey:UserID;constraint:false" json:"user,omitempty"`
 	CoverFile  *file.File       `gorm:"foreignKey:CoverFileID;constraint:false" json:"cover_file,omitempty"`

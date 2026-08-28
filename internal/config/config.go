@@ -80,6 +80,14 @@ type AppConfig struct {
 		Limit      int    `mapstructure:"limit"`
 	} `mapstructure:"ratelimit"`
 
+	// social: 点赞/收藏/播放量计数 + 榜单（Redis 计数 + 异步落库）
+	Social struct {
+		Enabled         bool `mapstructure:"enabled"`
+		FlushInterval   int  `mapstructure:"flush_interval"`   // 秒
+		FlushBatch      int  `mapstructure:"flush_batch"`      // 每批事件数
+		LeaderboardSize int  `mapstructure:"leaderboard_size"` // 榜单容量
+	} `mapstructure:"social"`
+
 	Snowflake struct {
 		NodeID int64 `mapstructure:"node_id"`
 	} `mapstructure:"snowflake"`

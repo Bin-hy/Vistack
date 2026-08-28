@@ -15,6 +15,7 @@ import (
 	"github.com/binhy/vistack/internal/authclient"
 	"github.com/binhy/vistack/internal/config"
 	"github.com/binhy/vistack/internal/core"
+	"github.com/binhy/vistack/internal/interaction"
 	"github.com/binhy/vistack/internal/middlewares"
 	"github.com/binhy/vistack/internal/routers"
 	authpkg "github.com/binhy/vistack/pkg/auth"
@@ -73,6 +74,17 @@ func RunAPI(cfg *config.AppConfig) {
 
 	limiter := middlewares.BuildLimiter(cfg, core.Redis)
 	middlewares.SetLogger(core.Logger)
+
+	if cfg.Social.Enabled {
+		svc := interaction.NewService(core.Redis, core.DB, interaction.Options{
+			FlushInterval:   time.Duration(cfg.Social.FlushInterval) * time.Second,
+			FlushBatch:      cfg.Social.FlushBatch,
+			LeaderboardSize: cfg.Social.LeaderboardSize,
+			Logger:          core.Logger,
+		})
+		v1.SetInteractionService(svc)
+		svc.StartFlusher(ctx)
+	}
 
 	r := core.NewServer()
 	routers.RegisterRoutes(r, verifier, limiter)

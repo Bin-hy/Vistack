@@ -56,6 +56,12 @@ token_burst = 20
 window = 60
 limit = 100
 
+[social]
+enabled = true
+flush_interval = 5
+flush_batch = 200
+leaderboard_size = 50
+
 [snowflake]
 node_id = 0 # 0 = 自动从实例标识(hostname/POD_IP)派生，多副本避免 ID 冲突
 
