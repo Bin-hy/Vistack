@@ -2,31 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .glass {
+    background-color: hsl(var(--glass) / 0.04);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    border: 1px solid hsl(var(--glass-border) / 0.08);
+  }
+  .glass-strong {
+    background-color: hsl(var(--glass) / 0.08);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid hsl(var(--glass-border) / 0.12);
+  }
+  .gradient-text {
+    background: linear-gradient(90deg, hsl(var(--gradient-from)), hsl(var(--gradient-to)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  /* shadcn-vue design tokens (light) */
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  /* 主色调整为 B 站蓝 #00A1D6 => hsl(195 100% 42%) */
-  --primary: 195 100% 42%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96.1%;
-  --secondary-foreground: 222.2 47.4% 11.2%;
-  --destructive: 0 72% 51%;
-  --destructive-foreground: 210 40% 98%;
-  --accent: 210 40% 96.1%;
-  --accent-foreground: 222.2 47.4% 11.2%;
-  --muted: 210 40% 96.1%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  /* 焦点高亮同主色 */
-  --ring: 195 100% 42%;
+  color-scheme: dark;
 
-  color-scheme: light;
+  /* 基底 */
+  --background: 240 16% 4%;
+  --foreground: 220 20% 94%;
+
+  /* 主色 indigo → violet 渐变 */
+  --primary: 243 75% 60%;
+  --primary-foreground: 0 0% 100%;
+  --gradient-from: 243 75% 60%;
+  --gradient-to: 258 90% 66%;
+
+  /* 表面 */
+  --secondary: 240 12% 12%;
+  --secondary-foreground: 220 20% 88%;
+  --accent: 243 30% 18%;
+  --accent-foreground: 220 20% 94%;
+  --muted: 240 12% 10%;
+  --muted-foreground: 220 12% 60%;
+
+  /* 线条与控件 */
+  --border: 240 12% 16%;
+  --input: 240 12% 14%;
+  --ring: 243 75% 60%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+
+  /* 玻璃 */
+  --glass: 0 0% 100%;
+  --glass-border: 0 0% 100%;
+
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
 
@@ -42,18 +74,22 @@ a {
   text-decoration: inherit;
 }
 a:hover {
-  color: hsl(var(--primary) / 0.9);
+  color: hsl(var(--primary) / 0.85);
 }
 
 body {
-	margin: 0;
-	min-width: 320px;
-	min-height: 100vh;
-	background-color: hsl(var(--background));
-	color: hsl(var(--foreground));
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  color: hsl(var(--foreground));
+  background-color: hsl(var(--background));
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% -10%, hsl(var(--gradient-from) / 0.18), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 0%, hsl(var(--gradient-to) / 0.14), transparent);
+  background-attachment: fixed;
 }
 
 #app {
-	width: 100%;
-	min-height: 100vh;
+  width: 100%;
+  min-height: 100vh;
 }

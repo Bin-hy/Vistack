@@ -66,51 +66,51 @@ function handleEditClick(event: MouseEvent) {
 </script>
 
 <template>
-	<UiCard class="flex gap-3 md:gap-4 p-3 md:p-4 cursor-pointer hover:shadow-md transition-shadow" @click="handleClick">
-		<div class="relative w-32 md:w-40 aspect-video overflow-hidden rounded bg-gray-200 flex-shrink-0">
+	<UiCard class="flex cursor-pointer gap-3 p-3 transition-shadow hover:shadow-lg md:gap-4 md:p-4" @click="handleClick">
+		<div class="relative aspect-video w-32 flex-shrink-0 overflow-hidden rounded bg-secondary md:w-40">
 			<img
 				v-if="video.cover_url"
 				:src="video.cover_url"
 				alt="cover"
 				class="h-full w-full object-cover"
 			/>
-			<div v-else class="h-full w-full flex items-center justify-center text-xs text-gray-400">
+			<div v-else class="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
 				暂无封面
 			</div>
 			<div v-if="durationText" class="absolute bottom-1 right-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-white">
 				{{ durationText }}
 			</div>
 		</div>
-		<div class="flex-1 flex flex-col justify-between gap-1 md:gap-2 min-w-0">
+		<div class="flex min-w-0 flex-1 flex-col justify-between gap-1 md:gap-2">
 			<div class="space-y-1">
-				<div class="line-clamp-2 text-sm font-semibold text-gray-900 leading-tight">
+				<div class="line-clamp-2 text-sm font-semibold leading-tight text-foreground">
 					{{ video.title || '未命名视频' }}
 				</div>
-				<div v-if="video.description" class="line-clamp-1 md:line-clamp-2 text-xs text-gray-500">
+				<div v-if="video.description" class="line-clamp-1 text-xs text-muted-foreground md:line-clamp-2">
 					{{ video.description }}
 				</div>
 			</div>
-			<div class="flex flex-col md:flex-row md:items-center justify-between text-[11px] text-gray-500 gap-2 md:gap-0">
+			<div class="flex flex-col justify-between gap-2 text-[11px] text-muted-foreground md:flex-row md:items-center md:gap-0">
 				<div class="flex items-center gap-2">
 					<span v-if="formattedDate" class="hidden sm:inline">创建于 {{ formattedDate }}</span>
 					<span v-if="formattedDate" class="sm:hidden">{{ formattedDate.split(' ')[0] }}</span>
 				</div>
-				<div class="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
+				<div class="flex w-full items-center justify-between gap-2 md:w-auto md:justify-end">
 					<span
 						v-if="statusText"
-						class="rounded-full border border-gray-300 px-2 py-0.5 text-[10px] text-gray-700 bg-gray-50 whitespace-nowrap"
+						class="whitespace-nowrap rounded-full border border-border bg-secondary px-2 py-0.5 text-[10px] text-muted-foreground"
 					>
 						{{ statusText }}
 					</span>
 					<div class="flex items-center gap-2">
-						<button 
-							class="text-blue-600 hover:text-blue-700 font-medium px-2 py-1 rounded hover:bg-blue-50"
+						<button
+							class="rounded px-2 py-1 font-medium text-primary hover:bg-accent"
 							@click="handleEditClick"
 						>
 							编辑
 						</button>
-						<button 
-							class="text-red-500 hover:text-red-600 font-medium px-2 py-1 rounded hover:bg-red-50"
+						<button
+							class="rounded px-2 py-1 font-medium text-destructive hover:bg-destructive/10"
 							@click.stop="$emit('delete', video)"
 						>
 							删除

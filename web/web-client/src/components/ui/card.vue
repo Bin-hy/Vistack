@@ -5,8 +5,7 @@ const props = defineProps<{ class?: string }>()
 <template>
 	<div
 		:class="[
-			'bg-white/95 dark:bg-neutral-900/90 border border-[hsl(var(--border))] rounded-xl shadow-sm',
-			'overflow-hidden',
+			'glass rounded-xl shadow-lg shadow-black/10 overflow-hidden',
 			props.class,
 		]"
 	>

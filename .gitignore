@@ -71,6 +71,7 @@ docker-compose.override.yml
 
 # cache
 .cache
+.pnpm-store
 
 # agent
 dsh-usage/

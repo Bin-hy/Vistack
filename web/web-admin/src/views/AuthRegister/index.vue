@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { UiButton } from '@/components/ui'
+import { UiButton, UiInput } from '@/components/ui'
+import { toast } from '@/components/ui/toast/useToast'
 import { register as apiRegister } from './api/api'
 
 const router = useRouter()
@@ -13,24 +14,24 @@ const loading = ref(false)
 
 async function onRegister() {
   if (!agree.value) {
-    alert('请先同意用户协议与隐私政策')
+    toast({ title: '请先同意用户协议与隐私政策', type: 'error' })
     return
   }
   if (!account.value || !password.value) {
-    alert('请输入账号和密码')
+    toast({ title: '请输入账号和密码', type: 'error' })
     return
   }
   if (password.value !== confirm.value) {
-    alert('两次输入的密码不一致')
+    toast({ title: '两次输入的密码不一致', type: 'error' })
     return
   }
   loading.value = true
   try {
     const res = await apiRegister({ account: account.value, password: password.value })
-    alert(`注册成功，欢迎 ${res.user.nickname ?? res.user.account}`)
+    toast({ title: `注册成功，欢迎 ${res.user.nickname ?? res.user.account}`, type: 'success' })
     router.push('/login')
   } catch (e: any) {
-    alert(e?.message ?? '注册失败，请稍后重试')
+    toast({ title: e?.message ?? '注册失败，请稍后重试', type: 'error' })
   } finally {
     loading.value = false
   }
@@ -38,11 +39,11 @@ async function onRegister() {
 </script>
 
 <template>
-  <div class="min-h-[80vh] flex items-center justify-center bg-[hsl(var(--background))]">
-    <div class="w-full max-w-[960px] grid grid-cols-1 md:grid-cols-2 gap-6">
-      <!-- 左侧视觉块 -->
-      <div class="hidden md:flex items-center justify-center rounded-xl bg-gradient-to-br from-blue-400 to-pink-400 p-8 shadow-lg">
-        <div class="text-white text-center space-y-2">
+  <div class="flex min-h-[80vh] items-center justify-center">
+    <div class="grid w-full max-w-[960px] grid-cols-1 gap-6 md:grid-cols-2">
+      <!-- 左侧品牌视觉块 -->
+      <div class="hidden items-center justify-center rounded-xl bg-gradient-to-br from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] p-8 shadow-lg md:flex">
+        <div class="space-y-2 text-center text-white">
           <img src="/logo.png" alt="logo" class="mx-auto h-16 w-16 rounded-full shadow-md" />
           <h2 class="text-2xl font-bold">加入我们</h2>
           <p class="text-sm opacity-90">注册以探索更多精彩内容</p>
@@ -50,67 +51,46 @@ async function onRegister() {
       </div>
 
       <!-- 右侧注册表单 -->
-      <div class="rounded-xl border border-[hsl(var(--border))] bg-white/90 dark:bg-neutral-900/80 shadow-sm p-8">
-        <h1 class="text-2xl font-bold mb-2">注册</h1>
-        <p class="text-sm text-gray-500 mb-6">使用手机号/邮箱创建你的账户</p>
+      <div class="glass rounded-xl p-8 shadow-lg">
+        <h1 class="text-2xl font-bold">注册</h1>
+        <p class="mb-6 mt-1 text-sm text-muted-foreground">使用手机号/邮箱创建你的账户</p>
 
         <div class="space-y-4">
-          <!-- 账号 -->
           <div class="flex items-center gap-4">
-            <label class="w-24 shrink-0 text-sm text-gray-600 text-right">账号</label>
-            <input
-              v-model="account"
-              type="text"
-              placeholder="手机号 / 邮箱"
-              class="flex-1 h-11 px-3 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">账号</label>
+            <UiInput v-model="account" type="text" placeholder="手机号 / 邮箱" class="flex-1" />
           </div>
-          <!-- 密码 -->
           <div class="flex items-center gap-4">
-            <label class="w-24 shrink-0 text-sm text-gray-600 text-right">密码</label>
-            <input
-              v-model="password"
-              type="password"
-              placeholder="请输入密码"
-              class="flex-1 h-11 px-3 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">密码</label>
+            <UiInput v-model="password" type="password" placeholder="请输入密码" class="flex-1" />
           </div>
-          <!-- 确认密码 -->
           <div class="flex items-center gap-4">
-            <label class="w-24 shrink-0 text-sm text-gray-600 text-right">确认密码</label>
-            <input
-              v-model="confirm"
-              type="password"
-              placeholder="请再次输入密码"
-              class="flex-1 h-11 px-3 rounded-md border focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+            <label class="w-24 shrink-0 text-right text-sm text-muted-foreground">确认密码</label>
+            <UiInput v-model="confirm" type="password" placeholder="请再次输入密码" class="flex-1" />
           </div>
-          <!-- 同意协议 -->
           <div class="flex items-center gap-4 text-sm">
             <div class="w-24 shrink-0"></div>
-            <label class="flex-1 inline-flex items-center gap-2 select-none">
+            <label class="flex flex-1 select-none items-center gap-2 text-muted-foreground">
               <input type="checkbox" v-model="agree" class="h-4 w-4" />
-              我已阅读并同意
-              <a href="#" class="text-blue-600 hover:underline">《用户协议》</a>
-              与
-              <a href="#" class="text-blue-600 hover:underline">《隐私政策》</a>
+              <span>我已阅读并同意</span>
+              <a href="#" class="text-primary hover:underline">《用户协议》</a>
+              <span>与</span>
+              <a href="#" class="text-primary hover:underline">《隐私政策》</a>
             </label>
           </div>
-          <!-- 注册按钮 -->
           <div class="flex items-center gap-4">
             <div class="w-24 shrink-0"></div>
-            <UiButton class="flex-1 h-11" :disabled="loading" @click="onRegister">{{ loading ? '注册中…' : '注册' }}</UiButton>
+            <UiButton class="h-11 flex-1" :disabled="loading" @click="onRegister">{{ loading ? '注册中…' : '注册' }}</UiButton>
           </div>
         </div>
 
-        <p class="text-center mt-6 text-sm">
+        <p class="mt-6 text-center text-sm text-muted-foreground">
           已有账号？
-          <router-link to="/login" class="text-blue-600 hover:underline">去登录</router-link>
+          <router-link to="/login" class="text-primary hover:underline">去登录</router-link>
         </p>
       </div>
     </div>
   </div>
-  
 </template>
 
 <style scoped>

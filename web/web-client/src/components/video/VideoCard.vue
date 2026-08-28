@@ -11,12 +11,12 @@ const formattedDate = computed(() => {
   const d = new Date(props.video.created_at)
   const now = new Date()
   const diff = now.getTime() - d.getTime()
-  
+
   if (diff < 60 * 1000) return '刚刚'
   if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))}分钟前`
   if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / (60 * 60 * 1000))}小时前`
   if (diff < 30 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / (24 * 60 * 60 * 1000))}天前`
-  
+
   return d.toLocaleDateString('zh-CN')
 })
 
@@ -42,39 +42,35 @@ function handleClick() {
 </script>
 
 <template>
-  <div class="group cursor-pointer flex flex-col gap-2" @click="handleClick">
+  <div class="group cursor-pointer" @click="handleClick">
     <!-- Cover -->
-    <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-gray-100">
-      <img 
-        v-if="video.cover_url" 
-        :src="video.cover_url" 
-        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+    <div class="glass relative aspect-video w-full overflow-hidden rounded-lg">
+      <img
+        v-if="video.cover_url"
+        :src="video.cover_url"
+        class="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
         alt="cover"
       />
-      <div v-else class="w-full h-full flex items-center justify-center text-gray-400 text-xs">
+      <div v-else class="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
         暂无封面
       </div>
-      
+
       <!-- Duration Badge -->
-      <div class="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">
+      <div class="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
         {{ durationText }}
       </div>
     </div>
-    
+
     <!-- Info -->
-    <div class="flex gap-3 items-start">
-        <div class="flex-1 min-w-0 space-y-1">
-            <h3 class="text-sm font-medium text-gray-900 line-clamp-2 leading-snug group-hover:text-pink-600 transition-colors">
-                {{ video.title }}
-            </h3>
-            <div class="flex items-center text-xs text-gray-500 gap-2">
-                <span v-if="video.user" class="flex items-center gap-1 hover:text-pink-500">
-                    {{ video.user.nickname }}
-                </span>
-                <span v-if="video.user">·</span>
-                <span>{{ formattedDate }}</span>
-            </div>
-        </div>
+    <div class="mt-2 space-y-1">
+      <h3 class="line-clamp-2 text-sm font-medium leading-snug text-foreground transition-colors group-hover:text-primary">
+        {{ video.title }}
+      </h3>
+      <div class="flex items-center gap-2 text-xs text-muted-foreground">
+        <span v-if="video.user">{{ video.user.nickname }}</span>
+        <span v-if="video.user">·</span>
+        <span>{{ formattedDate }}</span>
+      </div>
     </div>
   </div>
 </template>

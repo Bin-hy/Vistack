@@ -3,6 +3,8 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
 import { UiButton, UiCard, UiInput } from '@/components/ui'
+import { toast } from '@/components/ui/toast/useToast'
+import { confirm } from '@/components/ui/dialog/useConfirm'
 import { put, post as httpPost } from '@/lib/http'
 import CreatorVideoCard from '@/components/creator/VideoCard.vue'
 import { useUserStore } from '@/stores/user'
@@ -118,11 +120,11 @@ function calculateHash(file: File): Promise<string> {
 
 async function startUpload() {
 	if (!userStore.isLoggedIn) {
-		alert('请先登录')
+		toast({ title: '请先登录', type: 'error' })
 		return
 	}
 	if (!file.value) {
-		alert('请先选择视频文件')
+		toast({ title: '请先选择视频文件', type: 'error' })
 		return
 	}
 	uploading.value = true
@@ -361,16 +363,16 @@ function openEditDialog(video: CreatorVideoItem) {
 }
 
 async function handleDeleteVideo(video: CreatorVideoItem) {
-	if (!confirm(`确定要删除视频“${video.title}”吗？此操作不可恢复。`)) {
+	if (!(await confirm({ title: '删除视频', description: `确定要删除“${video.title}”吗？此操作不可恢复。`, danger: true, confirmText: '删除' }))) {
 		return
 	}
 	try {
 		await deleteVideo(video.id)
-		alert('删除成功')
+		toast({ title: '删除成功', type: 'success' })
 		editDialogOpen.value = false
 		loadVideos()
 	} catch (e: any) {
-		alert(e?.message ?? '删除失败')
+		toast({ title: e?.message ?? '删除失败', type: 'error' })
 	}
 }
 
@@ -527,10 +529,10 @@ async function saveEdit() {
 	}
 }
 
-function switchTab(tab: 'upload' | 'videos') {
+async function switchTab(tab: 'upload' | 'videos') {
 	if (activeTab.value === tab) return
 	if (activeTab.value === 'upload' && uploading.value) {
-		if (!confirm('视频正在上传中，切换将取消上传，确定要离开吗？')) {
+		if (!(await confirm({ title: '取消上传', description: '视频正在上传中，切换将取消上传，确定要离开吗？', danger: true }))) {
 			return
 		}
 	}
@@ -548,9 +550,9 @@ onUnmounted(() => {
 	window.removeEventListener('beforeunload', preventUnload)
 })
 
-onBeforeRouteLeave((_to, _from, next) => {
+onBeforeRouteLeave(async (_to, _from, next) => {
 	if (uploading.value) {
-		if (confirm('视频正在上传中，离开页面将取消上传，确定要离开吗？')) {
+		if (await confirm({ title: '取消上传', description: '视频正在上传中，离开页面将取消上传，确定要离开吗？', danger: true })) {
 			next()
 		} else {
 			next(false)
@@ -582,17 +584,17 @@ watch(activeTab, val => {
 					<div class="text-sm font-semibold">创作中心</div>
 
 					<!-- Mobile Tabs (Horizontal) -->
-					<div class="flex md:hidden border-b border-gray-100 pb-2 mb-2">
+					<div class="flex md:hidden border-b border-border pb-2 mb-2">
 						<button
 							class="flex-1 text-center py-2 text-xs font-medium border-b-2"
-							:class="activeTab === 'videos' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-600'"
+							:class="activeTab === 'videos' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
 							@click="switchTab('videos')"
 						>
 							视频管理
 						</button>
 						<button
 							class="flex-1 text-center py-2 text-xs font-medium border-b-2"
-							:class="activeTab === 'upload' ? 'border-pink-500 text-pink-600' : 'border-transparent text-gray-600'"
+							:class="activeTab === 'upload' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground'"
 							@click="switchTab('upload')"
 						>
 							视频投稿
@@ -601,25 +603,25 @@ watch(activeTab, val => {
 
 					<!-- Desktop Sidebar (Vertical) -->
 					<div class="hidden md:block">
-						<div class="text-xs text-gray-500 mt-1">内容管理</div>
+						<div class="text-xs text-muted-foreground mt-1">内容管理</div>
 						<button
 							class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
 							:class="
 								activeTab === 'videos'
-									? 'bg-blue-50 text-blue-600 font-medium'
-									: 'text-gray-600 hover:bg-gray-50'
+									? 'bg-accent text-primary font-medium'
+									: 'text-muted-foreground hover:bg-secondary'
 							"
 							@click="switchTab('videos')"
 						>
 							视频管理
 						</button>
-						<div class="text-xs text-gray-500 mt-3">投稿</div>
+						<div class="text-xs text-muted-foreground mt-3">投稿</div>
 						<button
 							class="mt-1 w-full rounded px-3 py-1.5 text-left text-xs transition-colors"
 							:class="
 								activeTab === 'upload'
-									? 'bg-pink-50 text-pink-600 font-medium'
-									: 'text-gray-600 hover:bg-gray-50'
+									? 'bg-accent text-primary font-medium'
+									: 'text-muted-foreground hover:bg-secondary'
 							"
 							@click="switchTab('upload')"
 						>
@@ -632,31 +634,31 @@ watch(activeTab, val => {
 				<template v-if="activeTab === 'upload'">
 					<UiCard class="p-6">
 						<h1 class="text-xl font-semibold mb-2">创作中心 · 视频投稿</h1>
-						<p class="text-sm text-gray-500 mb-4">一个参考 Bilibili 风格的简洁投稿界面。</p>
+						<p class="text-sm text-muted-foreground mb-4">一个参考 Bilibili 风格的简洁投稿界面。</p>
 						<div class="space-y-4">
 							<div class="space-y-1">
-								<div class="text-xs text-gray-500">稿件标题</div>
+								<div class="text-xs text-muted-foreground">稿件标题</div>
 								<UiInput v-model="title" placeholder="填写视频标题" />
 							</div>
 							<div class="space-y-1">
-								<div class="text-xs text-gray-500">稿件简介</div>
+								<div class="text-xs text-muted-foreground">稿件简介</div>
 								<textarea
 									v-model="description"
 									rows="4"
-									class="w-full text-sm rounded-md border border-[hsl(var(--input))] bg-white px-3 py-2 shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-0"
+									class="w-full text-sm rounded-md border border-[hsl(var(--input))] bg-input px-3 py-2 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-0"
 									placeholder="简单介绍一下你的视频内容"
 								/>
 							</div>
 							<div class="space-y-2">
-								<div class="text-xs text-gray-500">视频文件</div>
+								<div class="text-xs text-muted-foreground">视频文件</div>
 								<div
-									class="flex items-center justify-between rounded-md border border-dashed border-pink-300 bg-pink-50 px-4 py-3 cursor-pointer hover:border-pink-400"
+									class="flex items-center justify-between rounded-md border border-dashed border-border bg-secondary px-4 py-3 cursor-pointer hover:border-primary"
 								>
 									<div class="flex flex-col">
-										<span class="text-sm font-medium text-pink-600">{{ selectedFileName }}</span>
+										<span class="text-sm font-medium text-foreground">{{ selectedFileName }}</span>
 										<span
 											v-if="selectedFileSize"
-											class="text-xs text-pink-400 mt-0.5"
+											class="text-xs text-muted-foreground mt-0.5"
 										>
 											{{ selectedFileSize }}
 										</span>
@@ -664,7 +666,7 @@ watch(activeTab, val => {
 									<UiButton
 										variant="outline"
 										size="sm"
-										class="border-pink-400 text-pink-500 hover:bg-pink-50"
+										class="text-primary hover:bg-accent"
 										:disabled="uploading"
 										@click.stop.prevent="triggerSelectFile"
 									>
@@ -680,18 +682,18 @@ watch(activeTab, val => {
 								</div>
 							</div>
 							<div v-if="uploading || progress > 0" class="space-y-2">
-								<div class="flex items-center justify-between text-xs text-gray-500">
+								<div class="flex items-center justify-between text-xs text-muted-foreground">
 									<span>{{ statusText || '准备上传' }}</span>
 									<span>{{ progress }}%</span>
 								</div>
-								<div class="h-2 rounded-full bg-gray-200 overflow-hidden">
+								<div class="h-2 rounded-full bg-secondary overflow-hidden">
 									<div
-										class="h-full bg-pink-500 transition-all"
+										class="h-full bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] transition-all"
 										:style="{ width: progress + '%' }"
 									/>
 								</div>
 							</div>
-							<div v-if="errorMessage" class="text-xs text-red-500">
+							<div v-if="errorMessage" class="text-xs text-destructive">
 								{{ errorMessage }}
 							</div>
 							<div v-if="uploadedVideoId" class="text-xs text-green-600">
@@ -699,7 +701,7 @@ watch(activeTab, val => {
 							</div>
 							<div class="pt-2">
 								<UiButton
-									class="w-full bg-pink-500 hover:bg-pink-600 text-white"
+									class="w-full text-white"
 									size="lg"
 									:disabled="!canUpload"
 									@click="startUpload"
@@ -715,7 +717,7 @@ watch(activeTab, val => {
 						<div class="flex items-center justify-between">
 							<div>
 								<h1 class="text-xl font-semibold">内容管理 · 视频管理</h1>
-								<p class="text-xs text-gray-500 mt-1">管理你投稿的所有视频，查看状态与基础信息。</p>
+								<p class="text-xs text-muted-foreground mt-1">管理你投稿的所有视频，查看状态与基础信息。</p>
 							</div>
 							<div class="flex items-center gap-2">
 								<UiInput
@@ -727,9 +729,9 @@ watch(activeTab, val => {
 								<UiButton size="sm" class="h-9" @click="onSearch">搜索</UiButton>
 							</div>
 						</div>
-						<div v-if="listLoading" class="py-6 text-sm text-gray-500">正在加载视频列表…</div>
-						<div v-else-if="listError" class="py-6 text-sm text-red-500">{{ listError }}</div>
-					<div v-else-if="videos.length === 0" class="py-10 text-center text-sm text-gray-500">
+						<div v-if="listLoading" class="py-6 text-sm text-muted-foreground">正在加载视频列表…</div>
+						<div v-else-if="listError" class="py-6 text-sm text-destructive">{{ listError }}</div>
+					<div v-else-if="videos.length === 0" class="py-10 text-center text-sm text-muted-foreground">
 						暂无视频稿件，先去右侧投稿一个吧。
 					</div>
 					<div v-else class="space-y-3">
@@ -742,7 +744,7 @@ watch(activeTab, val => {
 					</div>
 						<div
 							v-if="total > pageSize"
-							class="pt-4 flex items-center justify-between text-[11px] text-gray-500"
+							class="pt-4 flex items-center justify-between text-[11px] text-muted-foreground"
 						>
 							<div>共 {{ total }} 个视频</div>
 							<div class="flex items-center gap-2">
@@ -775,16 +777,16 @@ watch(activeTab, val => {
 			v-if="editDialogOpen && editingVideo"
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
 		>
-			<div class="w-full max-w-lg rounded-lg bg-white p-6 shadow-lg space-y-4">
+			<div class="w-full max-w-lg rounded-lg glass-strong p-6 shadow-2xl shadow-black/50 space-y-4">
 				<div class="flex items-center justify-between mb-2">
 					<h2 class="text-base font-semibold">视频管理</h2>
-					<button class="text-xs text-gray-500" @click="editDialogOpen = false">关闭</button>
+					<button class="text-xs text-muted-foreground" @click="editDialogOpen = false">关闭</button>
 				</div>
 				<div class="flex gap-4">
 					<div class="w-40 flex-shrink-0">
-						<div class="text-xs text-gray-500 mb-1">封面</div>
+						<div class="text-xs text-muted-foreground mb-1">封面</div>
 						<div
-							class="relative w-full aspect-video overflow-hidden rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center cursor-pointer"
+							class="relative w-full aspect-video overflow-hidden rounded border border-dashed border-border bg-secondary flex items-center justify-center cursor-pointer"
 							@click="triggerSelectCover"
 						>
 							<img
@@ -793,7 +795,7 @@ watch(activeTab, val => {
 								alt="cover"
 								class="h-full w-full object-cover"
 							/>
-							<span v-else class="text-[11px] text-gray-400">点击选择封面</span>
+							<span v-else class="text-[11px] text-muted-foreground">点击选择封面</span>
 						</div>
 						<input
 							ref="coverInputRef"
@@ -805,20 +807,20 @@ watch(activeTab, val => {
 					</div>
 					<div class="flex-1 space-y-3">
 						<div class="space-y-1">
-							<div class="text-xs text-gray-500">标题</div>
+							<div class="text-xs text-muted-foreground">标题</div>
 							<UiInput v-model="editTitle" placeholder="填写视频标题" />
 						</div>
 						<div class="space-y-1">
-							<div class="text-xs text-gray-500">简介</div>
+							<div class="text-xs text-muted-foreground">简介</div>
 							<textarea
 								v-model="editDescription"
 								rows="4"
-								class="w-full text-sm rounded-md border border-[hsl(var(--input))] bg-white px-3 py-2 shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-0"
+								class="w-full text-sm rounded-md border border-[hsl(var(--input))] bg-input px-3 py-2 shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))] focus-visible:ring-offset-0"
 							/>
 						</div>
 						<div class="space-y-1">
-							<div class="text-xs text-gray-500">可见性</div>
-							<div class="flex items-center gap-4 text-xs text-gray-600">
+							<div class="text-xs text-muted-foreground">可见性</div>
+							<div class="flex items-center gap-4 text-xs text-muted-foreground">
 								<label class="flex items-center gap-1">
 									<input
 										type="radio"
@@ -839,14 +841,14 @@ watch(activeTab, val => {
 						</div>
 					</div>
 				</div>
-				<div v-if="editError" class="text-xs text-red-500">
+				<div v-if="editError" class="text-xs text-destructive">
 					{{ editError }}
 				</div>
 				<div class="flex justify-between pt-2">
 					<UiButton
 						variant="ghost"
 						size="sm"
-						class="h-9 px-4 text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+						class="h-9 px-4 text-xs text-destructive hover:bg-destructive/10"
 						@click="() => handleDeleteVideo(editingVideo!)"
 					>
 						删除视频
@@ -862,7 +864,7 @@ watch(activeTab, val => {
 						</UiButton>
 						<UiButton
 							size="sm"
-							class="h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+							class="h-9 px-4 text-xs text-white"
 							:disabled="editSaving"
 							@click="saveEdit"
 						>
@@ -876,14 +878,14 @@ watch(activeTab, val => {
 			v-if="cropDialogOpen"
 			class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		>
-			<div class="w-full max-w-2xl rounded-lg bg-white p-6 shadow-lg space-y-4">
+			<div class="w-full max-w-2xl rounded-lg glass-strong p-6 shadow-2xl shadow-black/50 space-y-4">
 				<div class="flex items-center justify-between mb-2">
 					<h2 class="text-base font-semibold">调整封面</h2>
-					<button class="text-xs text-gray-500" @click="cropDialogOpen = false">关闭</button>
+					<button class="text-xs text-muted-foreground" @click="cropDialogOpen = false">关闭</button>
 				</div>
 				<div
 					ref="cropContainerRef"
-					class="relative w-full max-w-xl mx-auto aspect-video overflow-hidden rounded bg-gray-900 flex items-center justify-center"
+					class="relative w-full max-w-xl mx-auto aspect-video overflow-hidden rounded bg-black/80 flex items-center justify-center"
 					@mousedown="onCropMouseDown"
 					@mousemove="onCropMouseMove"
 					@mouseup="onCropMouseUp"
@@ -898,10 +900,10 @@ watch(activeTab, val => {
 							transform: `translate(${cropOffsetX * 20}%, ${cropOffsetY * 20}%) scale(${cropScale})`,
 						}"
 					/>
-					<span v-else class="text-xs text-gray-400">未选择图片</span>
+					<span v-else class="text-xs text-muted-foreground">未选择图片</span>
 				</div>
 				<div class="space-y-2 pt-3">
-					<div class="flex items-center justify-between text-xs text-gray-500">
+					<div class="flex items-center justify-between text-xs text-muted-foreground">
 						<span>缩放</span>
 						<span>{{ cropScale.toFixed(2) }}x</span>
 					</div>
@@ -913,7 +915,7 @@ watch(activeTab, val => {
 						v-model.number="cropScale"
 						class="w-full"
 					/>
-					<p class="text-[11px] text-gray-400">按住图片拖动，调整显示区域</p>
+					<p class="text-[11px] text-muted-foreground">按住图片拖动，调整显示区域</p>
 				</div>
 				<div class="flex justify-end gap-2 pt-2">
 					<UiButton
@@ -927,7 +929,7 @@ watch(activeTab, val => {
 					</UiButton>
 					<UiButton
 						size="sm"
-						class="h-9 px-4 text-xs bg-blue-600 hover:bg-blue-700 text-white"
+						class="h-9 px-4 text-xs text-white"
 						:disabled="cropUploading"
 						@click="confirmCrop"
 					>

@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
 import DashPlayer from '@/components/player-dash/DashPlayer.vue'
+import { UiIcon } from '@/components/ui'
 import { baseURL, get } from '@/lib/http'
 import { getVideoSegmentsSignature, type VideoSegmentsSignatureCredentials } from './index'
 
@@ -38,10 +39,6 @@ const videoInfo = ref<VideoInfo | null>(null)
 
 const hasLiked = ref(false)
 const hasFavorited = ref(false)
-
-const likeIcon = computed(() => (hasLiked.value ? '/liked.png' : '/like-normal.png'))
-const favoriteIcon = computed(() => (hasFavorited.value ? '/collected.png' : '/collect-normal.png'))
-const forwardIcon = computed(() => '/forward-normal.png')
 
 const formattedDate = computed(() => {
 	if (!videoInfo.value?.created_at) return ''
@@ -122,10 +119,10 @@ onBeforeUnmount(() => {
 
 <template>
 	<BiliLayout>
-		<div class="flex flex-col lg:flex-row items-start gap-4 lg:gap-6">
+		<div class="flex flex-col items-start gap-4 lg:flex-row lg:gap-6">
 			<!-- Main Content: Player + Info -->
-			<div class="w-full lg:flex-1 space-y-4">
-				<div class="rounded-lg bg-white shadow-sm p-0 md:p-3 overflow-hidden">
+			<div class="w-full space-y-4 lg:flex-1">
+				<div class="glass overflow-hidden rounded-lg p-0 md:p-3">
 					<DashPlayer
 						v-if="manifestUrl && segmentsBaseUrl && segmentsCredentials"
 						:src="manifestUrl"
@@ -134,86 +131,86 @@ onBeforeUnmount(() => {
 						:segments-credentials="segmentsCredentials"
 					/>
 				</div>
-				<div class="rounded-lg bg-white shadow-sm p-4 space-y-2">
+				<div class="glass space-y-2 rounded-lg p-4">
 					<h1 class="text-lg font-semibold">
 						{{ videoInfo?.title || '视频标题' }}
 					</h1>
-					<div class="flex items-center justify-between text-xs text-gray-500">
+					<div class="flex items-center justify-between text-xs text-muted-foreground">
 						<div>
 							<span v-if="formattedDate">发布于 {{ formattedDate }}</span>
 						</div>
 					</div>
-					<div class="mt-3 flex items-center gap-3 text-xs">
+					<div class="mt-3 flex items-center gap-2 text-xs">
 						<button
-							class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-gray-700 hover:bg-gray-200"
+							class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+							:class="{ 'text-primary': hasLiked }"
 							type="button"
 							@click="toggleLike"
 						>
-							<img :src="likeIcon" alt="like" class="h-4 w-4" />
+							<UiIcon name="thumbs-up" :size="16" :class="hasLiked ? 'fill-current' : ''" />
 							<span>点赞</span>
 						</button>
 						<button
-							class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-gray-700 hover:bg-gray-200"
+							class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+							:class="{ 'text-primary': hasFavorited }"
 							type="button"
 							@click="toggleFavorite"
 						>
-							<img :src="favoriteIcon" alt="favorite" class="h-4 w-4" />
+							<UiIcon name="bookmark" :size="16" :class="hasFavorited ? 'fill-current' : ''" />
 							<span>收藏</span>
 						</button>
 						<button
-							class="flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-gray-700 hover:bg-gray-200"
+							class="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 							type="button"
 							@click="handleForward"
 						>
-							<img :src="forwardIcon" alt="forward" class="h-4 w-4" />
+							<UiIcon name="share" :size="16" />
 							<span>转发</span>
 						</button>
 					</div>
-					<div class="border-t border-gray-100 pt-3 text-sm text-gray-700 leading-relaxed">
+					<div class="border-t border-border pt-3 text-sm leading-relaxed text-foreground">
 						{{ videoInfo?.description || '暂无简介' }}
 					</div>
 				</div>
 			</div>
 
-			<!-- Sidebar: Author + Rec (TODO) -->
-			<div class="w-full lg:w-80 space-y-4">
-				<div class="rounded-lg bg-white shadow-sm p-4">
+			<!-- Sidebar: Author + Rec -->
+			<div class="w-full space-y-4 lg:w-80">
+				<div class="glass rounded-lg p-4">
 					<div class="flex items-center gap-3">
 						<img
 							:src="videoInfo?.user?.avatar_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix'"
 							alt="avatar"
-							class="h-12 w-12 rounded-full border border-gray-100"
+							class="h-12 w-12 rounded-full border border-border"
 						/>
 						<div>
-							<div class="font-medium text-gray-900">
+							<div class="font-medium text-foreground">
 								{{ videoInfo?.user?.nickname || '未知UP主' }}
 							</div>
-							<div class="text-xs text-gray-500">这家伙很懒，什么都没写</div>
+							<div class="text-xs text-muted-foreground">这家伙很懒，什么都没写</div>
 						</div>
 					</div>
 					<div class="mt-4 flex gap-2">
 						<button
-							class="flex-1 rounded bg-pink-500 py-1.5 text-sm font-medium text-white hover:bg-pink-600"
+							class="flex-1 rounded-md bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] py-1.5 text-sm font-medium text-white hover:opacity-90"
 						>
 							关注
 						</button>
-						<button
-							class="flex-1 rounded border border-gray-200 py-1.5 text-sm text-gray-600 hover:bg-gray-50"
-						>
+						<button class="glass flex-1 rounded-md py-1.5 text-sm text-foreground hover:bg-accent">
 							私信
 						</button>
 					</div>
 				</div>
 
 				<!-- Recommendations (Placeholder) -->
-				<div class="rounded-lg bg-white shadow-sm p-4">
-					<h3 class="mb-3 font-medium text-gray-900">相关推荐</h3>
+				<div class="glass rounded-lg p-4">
+					<h3 class="mb-3 font-medium text-foreground">相关推荐</h3>
 					<div class="space-y-3">
 						<div v-for="i in 5" :key="i" class="flex gap-2">
-							<div class="h-16 w-28 flex-shrink-0 rounded bg-gray-200"></div>
+							<div class="h-16 w-28 flex-shrink-0 rounded bg-secondary"></div>
 							<div class="flex flex-col justify-between py-0.5">
-								<div class="text-sm font-medium line-clamp-2">推荐视频标题演示内容...</div>
-								<div class="text-xs text-gray-500">UP主名称</div>
+								<div class="line-clamp-2 text-sm font-medium text-foreground">推荐视频标题演示内容...</div>
+								<div class="text-xs text-muted-foreground">UP主名称</div>
 							</div>
 						</div>
 					</div>

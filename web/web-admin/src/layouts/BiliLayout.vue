@@ -7,22 +7,22 @@ const router = useRouter()
 
 <template>
 	<div class="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-		<header class="border-b border-[hsl(var(--border))] bg-white/90 dark:bg-neutral-900/80">
-			<div class="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
-				<div class="flex items-center gap-2">
+		<header class="glass-strong sticky top-0 z-50">
+			<div class="mx-auto flex h-14 max-w-[1200px] items-center justify-between px-4">
+				<div class="flex cursor-pointer items-center gap-2" @click="router.push('/')">
 					<img src="/logo.png" alt="logo" class="h-8 w-8 rounded" />
-					<span class="font-bold text-blue-600">Vistack Admin</span>
+					<span class="gradient-text text-lg font-bold">Vistack Admin</span>
 				</div>
 				<div class="flex items-center gap-3">
-					<UiButton variant="link" size="sm" class="!text-blue-600 !no-underline" @click="router.push('/login')">登录</UiButton>
-					<UiButton variant="link" size="sm" class="!text-blue-600 !no-underline" @click="router.push('/register')">注册</UiButton>
+					<UiButton variant="ghost" size="sm" @click="router.push('/login')">登录</UiButton>
+					<UiButton variant="outline" size="sm" @click="router.push('/register')">注册</UiButton>
 				</div>
 			</div>
 		</header>
-		<main class="max-w-[1200px] mx-auto px-4 py-6">
+		<main class="mx-auto max-w-[1200px] px-4 py-6">
 			<slot />
 		</main>
-		<footer class="py-6 text-center text-xs text-gray-500">© Vistack</footer>
+		<footer class="py-6 text-center text-xs text-muted-foreground">© Vistack</footer>
 	</div>
 </template>
 

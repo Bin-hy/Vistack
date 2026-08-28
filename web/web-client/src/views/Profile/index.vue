@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from 'vue'
 import { useUserStore } from '@/stores/user'
 import BiliLayout from '@/layouts/BiliLayout.vue'
 import { UiButton, UiCard, UiInput, UiAvatarUpload } from '@/components/ui'
+import { toast } from '@/components/ui/toast/useToast'
 
 const userStore = useUserStore()
 const nickname = ref('')
@@ -28,7 +29,7 @@ function onAvatarChange(file: File | null) {
 
 async function onSave() {
 	if (!userStore.isLoggedIn) {
-		alert('请先登录')
+		toast({ title: '请先登录', type: 'error' })
 		return
 	}
 	saving.value = true
@@ -37,10 +38,10 @@ async function onSave() {
 			nickname: nickname.value || undefined,
 			avatarFile: avatarFile.value,
 		})
-		alert('资料已更新')
+		toast({ title: '资料已更新', type: 'success' })
 		avatarFile.value = null
 	} catch (e: any) {
-		alert(e?.message ?? '更新失败，请稍后重试')
+		toast({ title: e?.message ?? '更新失败，请稍后重试', type: 'error' })
 	} finally {
 		saving.value = false
 	}
@@ -50,22 +51,22 @@ async function onSave() {
 <template>
 	<BiliLayout>
 		<UiCard class="max-w-xl p-6">
-			<h1 class="text-xl font-semibold mb-4">个人资料</h1>
+			<h1 class="mb-4 text-xl font-semibold">个人资料</h1>
 			<div class="space-y-4">
 				<div>
-					<div class="text-xs text-gray-500 mb-1">用户名</div>
-					<div class="text-sm">{{ username }}</div>
+					<div class="mb-1 text-xs text-muted-foreground">用户名</div>
+					<div class="text-sm text-foreground">{{ username }}</div>
 				</div>
 				<div class="space-y-1">
-					<label class="block text-sm text-gray-600">昵称</label>
+					<label class="block text-sm text-muted-foreground">昵称</label>
 					<UiInput v-model="nickname" placeholder="请输入昵称" />
 				</div>
 				<div class="space-y-2">
-					<div class="text-sm text-gray-600">头像</div>
+					<div class="text-sm text-muted-foreground">头像</div>
 					<UiAvatarUpload :preview-url="avatarPreviewUrl || undefined" @change="onAvatarChange" />
 				</div>
 				<div>
-					<UiButton class="w-full h-11" :disabled="saving" @click="onSave">
+					<UiButton class="h-11 w-full" :disabled="saving" @click="onSave">
 						{{ saving ? '保存中…' : '保存修改' }}
 					</UiButton>
 				</div>

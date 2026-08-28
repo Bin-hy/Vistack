@@ -45,7 +45,7 @@ function onFileChange(e: Event) {
 <template>
 	<div class="flex items-center gap-4" :class="props.class">
 		<div
-			class="h-16 w-16 rounded-full bg-gray-100 border border-[hsl(var(--border))] overflow-hidden flex items-center justify-center"
+			class="h-16 w-16 rounded-full bg-secondary border border-border overflow-hidden flex items-center justify-center"
 		>
 			<img
 				v-if="internalPreview"
@@ -53,9 +53,9 @@ function onFileChange(e: Event) {
 				alt="avatar"
 				class="h-full w-full object-cover"
 			/>
-			<span v-else class="text-[10px] text-gray-400">暂无头像</span>
+			<span v-else class="text-[10px] text-muted-foreground">暂无头像</span>
 		</div>
-		<div class="flex flex-col gap-1 text-xs text-gray-500">
+		<div class="flex flex-col gap-1 text-xs text-muted-foreground">
 			<label
 				class="inline-flex items-center justify-center h-9 px-3 rounded-full bg-[hsl(var(--primary))] text-white text-xs cursor-pointer hover:bg-[hsl(var(--primary)/0.9)]"
 			>

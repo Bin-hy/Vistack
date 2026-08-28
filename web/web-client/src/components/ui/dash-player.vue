@@ -152,8 +152,8 @@ onBeforeUnmount(() => {
     />
   </div>
   <div class="w-full max-w-4xl mx-auto mt-2 flex items-center gap-2">
-    <label class="text-sm text-gray-700">清晰度</label>
-    <select class="border rounded px-2 py-1 text-sm" :value="selectedQuality" @change="setQuality(($event.target as HTMLSelectElement).value === 'auto' ? 'auto' : Number(($event.target as HTMLSelectElement).value))">
+    <label class="text-sm text-foreground">清晰度</label>
+    <select class="rounded border border-border bg-input px-2 py-1 text-sm text-foreground" :value="selectedQuality" @change="setQuality(($event.target as HTMLSelectElement).value === 'auto' ? 'auto' : Number(($event.target as HTMLSelectElement).value))">
       <option value="auto">自动</option>
       <option v-for="q in qualityOptions" :key="q.index" :value="q.index">{{ q.label }}（{{ (q.bandwidth/1000000).toFixed(2) }} Mbps）</option>
     </select>

@@ -11,6 +11,7 @@ import (
 	"github.com/binhy/vistack/internal/consts"
 	"github.com/binhy/vistack/internal/core"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 const retryZSetKey = "transcode:retry:zset"
@@ -67,8 +68,11 @@ func StartTranscodeRetryDispatcher(ctx context.Context) {
 						continue
 					}
 					b, _ := json.Marshal(m)
-					// 重新加入到消息队列中等待消费
-					_ = core.SendKafkaMessage(ctx, string(consts.KafkaTopicTranscode), strconv.FormatInt(m.VideoID, 10), b)
+					// 重新加入到消息队列中等待消费；失败则保留在 ZSet 下个周期重试
+					if err := core.SendKafkaMessage(ctx, string(consts.KafkaTopicTranscode), strconv.FormatInt(m.VideoID, 10), b); err != nil {
+						core.Logger.Error("retry dispatcher send failed", zap.Error(err))
+						continue
+					}
 					_ = core.Redis.ZRem(ctx, retryZSetKey, s).Err()
 				}
 			}
