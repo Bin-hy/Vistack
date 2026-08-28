@@ -96,6 +96,13 @@ type AppConfig struct {
 		CacheControlMaxAge int  `mapstructure:"cache_control_max_age"` // 秒
 	} `mapstructure:"danmaku"`
 
+	// comment: 视频评论（楼中楼 + 图片附件 + AC 敏感词 + 异步图片审核）
+	Comment struct {
+		Enabled       bool `mapstructure:"enabled"`
+		FlushInterval int  `mapstructure:"flush_interval"` // 秒
+		FlushBatch    int  `mapstructure:"flush_batch"`    // 每批事件数
+	} `mapstructure:"comment"`
+
 	Snowflake struct {
 		NodeID int64 `mapstructure:"node_id"`
 	} `mapstructure:"snowflake"`

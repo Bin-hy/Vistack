@@ -10,6 +10,7 @@ import { useUserStore } from '@/stores/user'
 import { toast } from '@/components/ui/toast/useToast'
 import { getVideoSegmentsSignature, type VideoSegmentsSignatureCredentials } from './index'
 import { getVideoRecommend, type VideoItem } from '@/views/Index/api/api'
+import CommentSection from './comment/CommentSection.vue'
 
 interface VideoAuthor {
 	id: string
@@ -325,6 +326,9 @@ onBeforeUnmount(() => {
 						{{ videoInfo?.description || '暂无简介' }}
 					</div>
 				</div>
+
+				<!-- 评论区 -->
+				<CommentSection :video-id="videoId" />
 			</div>
 
 			<!-- Sidebar: Author + Rec -->

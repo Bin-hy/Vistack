@@ -13,6 +13,7 @@ import (
 
 	v1 "github.com/binhy/vistack/internal/api/v1"
 	"github.com/binhy/vistack/internal/authclient"
+	"github.com/binhy/vistack/internal/comment"
 	"github.com/binhy/vistack/internal/config"
 	"github.com/binhy/vistack/internal/consts"
 	"github.com/binhy/vistack/internal/core"
@@ -101,6 +102,17 @@ func RunAPI(cfg *config.AppConfig) {
 		})
 		v1.SetDanmakuService(dsvc)
 		_ = dsvc.LoadSensitiveWords(ctx)
+	}
+
+	if cfg.Comment.Enabled {
+		csvc := comment.NewService(core.Redis, core.DB, comment.Options{
+			FlushInterval: time.Duration(cfg.Comment.FlushInterval) * time.Second,
+			FlushBatch:    cfg.Comment.FlushBatch,
+			Logger:        core.Logger,
+		})
+		v1.SetCommentService(csvc)
+		_ = csvc.LoadSensitiveWords(ctx)
+		csvc.StartFlusher(ctx)
 	}
 
 	r := core.NewServer()

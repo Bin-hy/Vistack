@@ -46,6 +46,7 @@ func AutoMigrate(db *gorm.DB) error {
 
 		// 社交互动
 		&mSocial.VideoComment{},
+		&mSocial.CommentLike{},
 		&mSocial.VideoLike{},
 		&mSocial.VideoFavorite{},
 		&mSocial.VideoPlayLog{},
@@ -70,6 +71,14 @@ func AutoMigrate(db *gorm.DB) error {
 
 	// CREATE INDEX idx_transcode_status_update_at ON video_transcodes (status, updated_at, video_id, id)
 	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_transcode_status_update_at ON video_transcodes (status, updated_at, video_id, id);`).Error; err != nil {
+	}
+
+	// 评论列表主查询索引（一级评论游标分页 + 展开回复）
+	if err := db.Exec(`CREATE INDEX IF NOT EXISTS idx_comments_video_root ON video_comments (video_id, root_id, id);`).Error; err != nil {
+	}
+
+	// attachments 列回填空数组，避免历史行 NULL 导致 jsonb 读取异常
+	if err := db.Exec(`UPDATE video_comments SET attachments = '[]' WHERE attachments IS NULL;`).Error; err != nil {
 	}
 
 	return initDefaultRoles(db)

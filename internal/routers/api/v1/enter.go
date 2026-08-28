@@ -5,6 +5,7 @@ type RouterGroup struct {
 	VideoRouter
 	SocialRouter
 	DanmakuRouter
+	CommentRouter
 }
 
 var RouterGroupApp = new(RouterGroup)

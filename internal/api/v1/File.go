@@ -68,6 +68,44 @@ func (f *FileApi) AvatarUpload(c *gin.Context) {
 	})
 }
 
+// CommentImageUpload 评论图片/表情包上传, 返回文件记录（供评论附件引用）。
+func (f *FileApi) CommentImageUpload(c *gin.Context) {
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Get file failed"})
+		return
+	}
+	if file.Size > 5*1024*1024 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "File size too large (max 5MB)"})
+		return
+	}
+	objectName, fullURL, err := storage.UploadFile(c.Request.Context(), file, "comments")
+	if err != nil {
+		core.Logger.Error("upload comment image failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Upload failed"})
+		return
+	}
+	newFile := mFile.File{
+		Bucket:    global.AppConfig.MinIO.Bucket,
+		ObjectKey: objectName,
+		Status:    mFile.FileStatusActive,
+		RefType:   mFile.FileRefTypeCommentImage,
+		MimeType:  file.Header.Get("Content-Type"),
+		Size:      file.Size,
+	}
+	if err := core.DB.Create(&newFile).Error; err != nil {
+		core.Logger.Error("create comment image file record failed", zap.Error(err))
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Save file record failed"})
+		return
+	}
+	c.JSON(http.StatusOK, FileUploadedResponse{
+		FileID:     newFile.ID,
+		URL:        fullURL,
+		ObjectName: objectName,
+		FileName:   file.Filename,
+	})
+}
+
 // CoverUpload 封面文件上传, 返回文件路径
 func (f *FileApi) CoverUpload(c *gin.Context) {
 	// 1. 获取上传的文件

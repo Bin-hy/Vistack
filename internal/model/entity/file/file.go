@@ -25,6 +25,7 @@ const (
 	FileRefTypeTranscodeArtifact FileRefType = "transcode_artifact"
 	FileRefTypeVideoManifest     FileRefType = "video_manifest"
 	FileRefTypeVideoCover        FileRefType = "video_cover"
+	FileRefTypeCommentImage      FileRefType = "comment_image"
 )
 
 // File 对应 files 表，表示 MinIO 中的物理文件对象

@@ -65,6 +65,11 @@ local_cache_size = 1024
 local_cache_ttl = 2
 cache_control_max_age = 5
 
+[comment]
+enabled = true
+flush_interval = 5
+flush_batch = 200
+
 [snowflake]
 node_id = 0 # 0 = 自动从实例标识(hostname/POD_IP)派生，多副本避免 ID 冲突
 
