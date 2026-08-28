@@ -27,6 +27,8 @@
 **Vistack** 是一个面向高并发场景的分布式视频平台，同时支持**实时直播（Live Streaming）**与**视频点播（VOD）**。项目以「高并发、可水平扩展」为核心设计目标，实践了一套云原生的分布式转码与流媒体架构：任务队列解耦、gRPC 远程转码、etcd 服务发现、对象存储分发，全部可一键容器化并平滑迁移至 Kubernetes。此外还内置了一套高并发应用层能力——Redis 缓存三件套、分布式限流、点赞/收藏/播放量计数与热门榜单，覆盖面试高频的「高并发场景题」。
 
 > 🎯 在线体验：<https://vistack.pages.dev>
+>
+> 📖 使用说明与设计文档：<https://github.com/binhy/vistack-docs>（VitePress 站点，含快速开始、Docker 一键部署与各系统设计细节）
 
 ## 🚀 核心特性
 
@@ -40,7 +42,7 @@
 - 基于 **live777（Rust SFU）** 的 WebRTC 分发，服务端轻量、高并发，OBS 推流 → 多端拉流。
 
 ### 分布式与可扩展
-- **三角色拆分**：`api` / `worker` / `transcoder` 三个进程独立部署、独立扩容。
+- **多角色拆分**：`api` / `worker` / `transcoder` / `auth` 四个进程独立部署、独立扩容（单二进制 + role 分发）。
 - **任务队列**：Kafka 分发转码/删除任务，Redis ZSet 指数退避重试 + Watchdog 超时兜底。
 - **服务发现**：transcoder 实例向 **etcd** 注册并保活，worker 经 etcd 动态发现 + gRPC `round_robin` 负载均衡。
 - **容器化 & 云原生**：Docker Compose 一键起栈，附 Kubernetes 清单。
@@ -66,6 +68,7 @@ flowchart LR
         API[api<br/>Gin HTTP · 上传/预签名]
         Worker[worker<br/>Kafka 消费者 · 编排]
         TC[transcoder<br/>gRPC · FFmpeg]
+        AUTH[auth<br/>RS256 签发 · JWKS · gRPC 用户查询]
     end
 
     subgraph Infra["基础设施"]
@@ -80,12 +83,15 @@ flowchart LR
     Web -->|HTTP /api/v1| API
     OBS -->|RTMP/WHIP 推流| SFU
     Web -->|WebRTC 拉流| SFU
+    Web -->|注册/登录/资料| AUTH
+    API -->|JWKS 本地验签| AUTH
 
     API -->|投递转码/删除任务| K
     K -->|消费任务| Worker
     Worker -->|服务发现| E
     Worker -->|gRPC ProcessVideo| TC
     TC -->|注册/保活| E
+    AUTH -->|注册/保活| E
     TC -->|下载原片 / 上传 DASH| M
     Worker -->|读写元数据| PG
     Worker -->|租约/重试| R
@@ -111,6 +117,7 @@ flowchart LR
 |------|------|
 | 前端 | Vue 3 + Pinia + Tailwind CSS + dash.js / Video.js |
 | 后端 API | Go 1.26 + Gin + GORM + PostgreSQL + Redis |
+| 认证 | 独立 Auth 服务（RSA RS256 + JWKS + gRPC 用户查询 + etcd 注册） |
 | 缓存 | Redis Cache-Aside（穿透/击穿/雪崩 + 布隆过滤器） |
 | 限流 | 令牌桶（单机）+ Redis Lua 滑动窗口（分布式） |
 | 社交互动 | Redis Set/INCR 计数 + 异步批量落库 + ZSet 榜单 |
@@ -127,25 +134,30 @@ flowchart LR
 
 ```
 Vistack
-├── cmd/vistack/            # 入口：按 VISTACK_ROLE 分发 api/worker/transcoder
+├── cmd/vistack/            # 入口：按 VISTACK_ROLE 分发 api/worker/transcoder/auth/migrate
 ├── internal/
-│   ├── role/               # 三角色启动引导
+│   ├── role/               # 多角色启动引导
 │   ├── api/v1/             # HTTP 处理器
 │   ├── routers/            # 路由与中间件注册
 │   ├── core/               # DB/Redis/MinIO/Kafka/Snowflake 等基础设施封装
 │   │   ├── cache/          # 通用缓存组件（穿透/击穿/雪崩 + 布隆过滤器）
-│   │   └── message_queue/  # transcode(worker/retry/watchdog)、video(删除)
+│   │   ├── message_queue/  # transcode(worker/retry/watchdog)、video(删除)、danmaku、comment
+│   │   └── leader/         # etcd 领导选举（单例任务）
 │   ├── middlewares/        # auth/cors/requestid/ratelimit
 │   │   └── ratelimit/      # 令牌桶（单机）+ Redis 滑动窗口（分布式）
 │   ├── interaction/        # 点赞/收藏/播放量计数 + 榜单 + 异步落库
+│   ├── danmaku/            # 弹幕（敏感词 + 三级缓存 + 异步落库）
+│   ├── comment/            # 评论（父子结构 + 附件 + 审核）
+│   ├── auth/               # Auth 服务（HTTP 认证 + gRPC 用户查询）
+│   ├── authclient/         # Auth 用户查询客户端
 │   ├── transcoder/         # gRPC 转码服务 + ffmpeg 逻辑 + etcd 注册
 │   ├── discovery/          # etcd → gRPC resolver 服务发现
 │   ├── config/             # 配置结构（Viper）
 │   └── model/entity/       # GORM 实体
 ├── proto/transcoder/v1/    # gRPC 契约（buf）
 ├── migrations/             # GORM 自动迁移
-├── conf/                   # app.toml / app.docker.toml 配置
-├── deploy/k8s/             # Kubernetes 清单
+├── conf/                   # app.toml / app.local.toml / app.docker.toml 配置
+├── deploy/                 # Kubernetes 清单 + Traefik 网关配置
 ├── web/                    # pnpm monorepo：ui / web-client / web-admin
 ├── Dockerfile              # 双 target：vistack / vistack-transcoder
 └── compose.yml             # 一键起栈
@@ -160,7 +172,7 @@ cp .env.example .env.local
 docker compose up --build -d
 ```
 
-启动后包含 **api(8080) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务。水平扩容转码：
+启动后包含 **api(8080) / auth(8081) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务，前端统一经 **Traefik**（:80）按路径分流。水平扩容转码：
 
 ```bash
 docker compose up --scale transcoder=3 -d
@@ -174,6 +186,7 @@ docker compose up --scale transcoder=3 -d
 go run ./cmd/vistack api        # API 服务（默认 :8080）
 go run ./cmd/vistack worker     # 转码编排 Worker
 go run ./cmd/vistack transcoder # gRPC 转码服务（需本机安装 FFmpeg）
+go run ./cmd/vistack auth       # Auth 服务（:8081 HTTP + :50052 gRPC）
 ```
 
 **前端**（pnpm workspace）：
@@ -197,12 +210,13 @@ pnpm run dev      # 启动 web-client(:8335) 与 web-admin(:8334)
 | `[kafka]` | 消息队列 brokers 与消费组 |
 | `[etcd]` | 服务发现端点与注册前缀 |
 | `[transcoder]` | gRPC 监听地址、静态兜底地址、是否走 etcd 发现 |
-| `[auth]` / `[cors]` | JWT 与跨域 |
+| `[auth]` / `[auth_service]` | JWT（kid/issuer/过期/JWKS）与 Auth 服务（HTTP/gRPC 地址、JWKS URL） |
+| `[cors]` | 跨域 |
 | `[cache]` | Redis 缓存层（TTL 范围 / 空值 TTL / 锁 TTL / 布隆参数） |
 | `[ratelimit]` | 登录接口限流（算法 / 阈值 / 窗口） |
 | `[social]` | 点赞/收藏/播放量（落库间隔 / 批量 / 榜单容量） |
 
-三个角色通过 `VISTACK_ROLE`（或启动命令首个位置参数）选择：`api` / `worker` / `transcoder`。
+四个角色通过 `VISTACK_ROLE`（或启动命令首个位置参数）选择：`api` / `worker` / `transcoder` / `auth`（另有 `migrate` 单独执行数据库迁移）。
 
 ## 🗄️ 数据库表结构
 
