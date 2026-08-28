@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { VideoSegmentsSignatureCredentials } from '@/views/VideoPlayer'
+import { UiIcon } from '@/components/ui'
 import PlayButton from './controls/PlayButton.vue'
 import ProgressBar from './controls/ProgressBar.vue'
 import VolumeControl from './controls/VolumeControl.vue'
@@ -372,14 +373,14 @@ watch(
 					</button>
 					<div
 						v-if="showRateMenu"
-						class="absolute bottom-8 right-0 z-20 w-20 rounded bg-black/90 py-1 text-xs shadow-lg"
+						class="absolute bottom-8 right-0 z-20 w-20 rounded-lg bg-black/90 py-1 text-xs shadow-xl ring-1 ring-white/10"
 					>
 						<button
 							v-for="rate in rateOptions"
 							:key="rate"
 							type="button"
 							class="block w-full px-3 py-1 text-left"
-							:class="rate === playbackRate ? 'text-[#00A1D6]' : 'text-white/80 hover:text-white'"
+							:class="rate === playbackRate ? 'text-primary' : 'text-white/80 hover:text-white'"
 							@click="handleSelectRate(rate)"
 						>
 							{{ rate }}x
@@ -391,26 +392,27 @@ watch(
 			</div>
 			<div class="mt-1 md:mt-2 flex items-center gap-2">
 				<button
-					class="flex items-center rounded-full border px-2 md:px-3 py-0.5 md:py-1 text-xs whitespace-nowrap"
-					:class="danmakuEnabled ? 'border-[#00A1D6] bg-[#00A1D6]/10 text-[#00A1D6]' : 'border-white/30 bg-black/40 text-white/70'"
+					class="flex items-center rounded-full border px-2 md:px-3 py-0.5 md:py-1 text-xs whitespace-nowrap transition-colors"
+					:class="danmakuEnabled ? 'border-primary/50 bg-primary/15 text-primary' : 'border-white/30 bg-black/40 text-white/70'"
 					type="button"
 					@click="danmakuEnabled = !danmakuEnabled"
 				>
-					<span class="mr-1 hidden sm:inline">弹幕</span>
-					<span>{{ danmakuEnabled ? '开' : '关' }}</span>
+					<UiIcon name="message-square" :size="13" class="mr-1 hidden sm:block" />
+					<span>{{ danmakuEnabled ? '弹幕开' : '弹幕关' }}</span>
 				</button>
 				<input
 					v-model="danmakuText"
-					class="h-7 md:h-8 flex-1 rounded border border-white/20 bg-black/40 px-2 md:px-3 text-xs text-white outline-none focus:border-[#00A1D6]"
-					placeholder="发个弹幕..."
+					class="h-7 md:h-8 flex-1 rounded border border-white/20 bg-black/40 px-2 md:px-3 text-xs text-white outline-none transition-colors placeholder:text-white/40 focus:border-primary/60"
+					placeholder="发个弹幕，一起讨论…"
 					@keyup.enter="handleSendDanmaku"
 				/>
 				<button
-					class="h-7 md:h-8 rounded bg-[#00A1D6] px-3 md:px-4 text-xs font-medium text-white hover:bg-[#0090c0] whitespace-nowrap"
+					class="flex h-7 md:h-8 items-center gap-1 rounded bg-gradient-to-r from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] px-3 md:px-4 text-xs font-medium text-white transition-all hover:brightness-110 whitespace-nowrap"
 					type="button"
 					@click="handleSendDanmaku"
 				>
-					发送
+					<UiIcon name="send" :size="13" />
+					<span>发送</span>
 				</button>
 			</div>
 		</div>

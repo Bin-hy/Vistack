@@ -5,7 +5,7 @@ const props = defineProps<{ class?: string }>()
 <template>
 	<div
 		:class="[
-			'glass rounded-xl shadow-lg shadow-black/10 overflow-hidden',
+			'glass rounded-xl shadow-soft overflow-hidden',
 			props.class,
 		]"
 	>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { UiIcon } from '@/components/ui'
+
 const props = defineProps<{
 	playing: boolean
 }>()
@@ -14,11 +16,10 @@ function handleClick() {
 
 <template>
 	<button
-		class="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
+		class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/25"
 		type="button"
 		@click="handleClick"
 	>
-		<span v-if="props.playing" class="text-xs">⏸</span>
-		<span v-else class="text-xs">▶</span>
+		<UiIcon :name="props.playing ? 'pause' : 'play'" :size="16" :class="props.playing ? '' : 'translate-x-px'" />
 	</button>
 </template>

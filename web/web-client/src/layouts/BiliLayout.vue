@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { UiButton, UiInput, UiIcon } from '@/components/ui'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 const searchQuery = ref('')
 const avatarMenuOpen = ref(false)
 const mobileMenuOpen = ref(false)
+const scrolled = ref(false)
 const avatarWrapperRef = ref<HTMLElement | null>(null)
 
 function goProfile() {
@@ -41,6 +43,8 @@ const avatarText = computed(() => {
     return name.slice(0, 1)
 })
 
+const username = computed(() => userStore.currentUser?.username ?? '')
+
 function toggleAvatarMenu() {
     avatarMenuOpen.value = !avatarMenuOpen.value
 }
@@ -56,65 +60,108 @@ function handleClickOutside(event: MouseEvent) {
     }
 }
 
+function handleScroll() {
+    scrolled.value = window.scrollY > 8
+}
+
 onMounted(async () => {
     if (userStore.isLoggedIn && !userStore.currentUser) {
         await userStore.fetchUserInfo()
     }
     document.addEventListener('click', handleClickOutside)
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    handleScroll()
 })
 
 onBeforeUnmount(() => {
     document.removeEventListener('click', handleClickOutside)
+    window.removeEventListener('scroll', handleScroll)
 })
 </script>
 
 <template>
-    <div class="min-h-screen bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
-        <header class="glass-strong sticky top-0 z-50">
-            <div class="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4">
+    <div class="flex min-h-screen flex-col bg-[hsl(var(--background))] text-[hsl(var(--foreground))]">
+        <header
+            class="sticky top-0 z-50 transition-all duration-300"
+            :class="
+                scrolled
+                    ? 'glass-strong shadow-lg shadow-black/30 border-b border-white/10'
+                    : 'border-b border-transparent bg-transparent'
+            "
+        >
+            <div class="mx-auto flex h-14 max-w-[1200px] items-center justify-between gap-3 px-4 sm:h-16">
                 <!-- Mobile Menu Button -->
-                <button class="p-2 text-muted-foreground md:hidden" @click.stop="toggleMobileMenu">
+                <button
+                    class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+                    aria-label="菜单"
+                    @click.stop="toggleMobileMenu"
+                >
                     <UiIcon name="menu" :size="22" />
                 </button>
 
                 <!-- Logo -->
-                <div class="flex cursor-pointer items-center gap-2" @click="router.push('/')">
-                    <img src="/logo.png" alt="logo" class="h-8 w-8 rounded" />
-                    <span class="gradient-text hidden text-lg font-bold sm:inline-block">Vistack</span>
+                <div class="flex cursor-pointer select-none items-center gap-2.5" @click="router.push('/')">
+                    <img src="/logo.png" alt="Vistack" class="h-8 w-8 rounded-lg ring-1 ring-white/10 sm:h-9 sm:w-9" />
+                    <span class="gradient-text hidden text-xl font-extrabold tracking-tight sm:inline-block">Vistack</span>
                 </div>
 
                 <!-- Desktop Nav -->
                 <nav class="hidden items-center gap-1 text-sm md:flex">
                     <router-link
-                        class="rounded-md px-3 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         to="/"
+                        class="rounded-lg px-3.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        :class="route.path === '/' ? 'bg-accent text-foreground' : ''"
                     >
                         首页
+                    </router-link>
+                    <router-link
+                        to="/creator"
+                        class="rounded-lg px-3.5 py-2 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        :class="route.path === '/creator' ? 'bg-accent text-foreground' : ''"
+                    >
+                        创作中心
                     </router-link>
                 </nav>
 
                 <!-- Search Bar -->
                 <div class="hidden max-w-xl flex-1 justify-center px-4 sm:flex">
-                    <div class="flex w-full items-center gap-2">
-                        <UiInput v-model="searchQuery" placeholder="搜索" class="h-9 text-sm" @keyup.enter="doSearch" />
-                        <UiButton class="h-9 px-3" size="sm" @click="doSearch">搜索</UiButton>
+                    <div class="relative w-full max-w-sm">
+                        <UiIcon
+                            name="search"
+                            :size="16"
+                            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <UiInput
+                            v-model="searchQuery"
+                            placeholder="搜索视频、UP主…"
+                            class="h-10 pl-9 pr-16 text-sm"
+                            @keyup.enter="doSearch"
+                        />
+                        <UiButton
+                            class="absolute right-1 top-1/2 h-8 -translate-y-1/2 px-3 text-xs"
+                            size="sm"
+                            @click="doSearch"
+                        >
+                            搜索
+                        </UiButton>
                     </div>
                 </div>
 
                 <!-- Right Actions -->
                 <div class="flex items-center gap-2 sm:gap-3">
-                    <UiButton
-                        variant="outline"
-                        size="sm"
-                        class="hidden h-8 text-xs md:inline-flex"
-                        @click="router.push('/creator')"
+                    <!-- Mobile search icon -->
+                    <button
+                        class="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:hidden"
+                        aria-label="搜索"
+                        @click="mobileMenuOpen = true"
                     >
-                        创作中心
-                    </UiButton>
+                        <UiIcon name="search" :size="20" />
+                    </button>
 
                     <div ref="avatarWrapperRef" class="relative">
                         <div
-                            class="flex h-8 w-8 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] text-sm font-medium text-white ring-1 ring-white/20 transition-transform duration-150 hover:scale-110 sm:h-9 sm:w-9"
+                            class="flex h-9 w-9 cursor-pointer select-none items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] text-sm font-semibold text-white ring-2 ring-white/10 transition-all duration-200 hover:scale-105 hover:ring-primary/50"
+                            :title="userStore.displayName || '未登录'"
                             @click="toggleAvatarMenu"
                         >
                             <img
@@ -125,46 +172,125 @@ onBeforeUnmount(() => {
                             />
                             <span v-else>{{ avatarText }}</span>
                         </div>
-                        <div
-                            v-if="avatarMenuOpen"
-                            class="glass-strong absolute right-0 z-50 mt-2 w-44 rounded-lg p-1 shadow-xl shadow-black/30"
-                        >
-                            <button
-                                class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-accent"
-                                @click="goProfile"
+
+                        <!-- Avatar Dropdown -->
+                        <Transition name="dropdown">
+                            <div
+                                v-if="avatarMenuOpen"
+                                class="glass-strong absolute right-0 z-50 mt-2 w-56 rounded-xl p-1.5 shadow-2xl shadow-black/50"
                             >
-                                <UiIcon name="user" :size="16" />个人中心
-                            </button>
-                            <button
-                                class="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-foreground hover:bg-accent"
-                                @click="onLogout"
-                            >
-                                <UiIcon name="logout" :size="16" />退出登录
-                            </button>
-                        </div>
+                                <div class="flex items-center gap-3 rounded-lg px-3 py-2.5">
+                                    <div
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[hsl(var(--gradient-from))] to-[hsl(var(--gradient-to))] text-sm font-semibold text-white"
+                                    >
+                                        <img
+                                            v-if="userStore.currentUser?.avatar_url"
+                                            :src="userStore.currentUser?.avatar_url"
+                                            alt="avatar"
+                                            class="h-full w-full object-cover"
+                                        />
+                                        <span v-else>{{ avatarText }}</span>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <div class="truncate text-sm font-semibold text-foreground">
+                                            {{ userStore.displayName || '未登录' }}
+                                        </div>
+                                        <div class="truncate text-xs text-muted-foreground">
+                                            {{ username || '登录后体验完整功能' }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="my-1 h-px bg-white/10"></div>
+                                <button
+                                    class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                                    @click="goProfile"
+                                >
+                                    <UiIcon name="user" :size="16" class="text-muted-foreground" />个人中心
+                                </button>
+                                <button
+                                    class="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                                    @click="onLogout"
+                                >
+                                    <UiIcon name="logout" :size="16" class="text-muted-foreground" />退出登录
+                                </button>
+                            </div>
+                        </Transition>
                     </div>
                 </div>
             </div>
 
             <!-- Mobile Menu Dropdown -->
-            <div v-if="mobileMenuOpen" class="glass-strong border-t-0 px-4 py-3 md:hidden">
-                <div class="mb-3 flex items-center gap-2">
-                    <UiInput v-model="searchQuery" placeholder="搜索" class="h-9 text-sm" @keyup.enter="doSearch" />
-                    <UiButton class="h-9 px-3" size="sm" @click="doSearch">搜索</UiButton>
+            <Transition name="dropdown">
+                <div v-if="mobileMenuOpen" class="glass-strong border-t border-white/10 px-4 py-3 md:hidden">
+                    <div class="relative mb-3">
+                        <UiIcon
+                            name="search"
+                            :size="16"
+                            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                        />
+                        <UiInput
+                            v-model="searchQuery"
+                            placeholder="搜索视频、UP主…"
+                            class="h-10 pl-9 pr-16 text-sm"
+                            @keyup.enter="doSearch"
+                        />
+                        <UiButton class="absolute right-1 top-1/2 h-8 -translate-y-1/2 px-3 text-xs" size="sm" @click="doSearch">
+                            搜索
+                        </UiButton>
+                    </div>
+                    <nav class="flex flex-col gap-1 text-sm">
+                        <router-link
+                            class="rounded-lg px-3 py-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            :class="route.path === '/' ? 'bg-accent text-foreground' : ''"
+                            to="/"
+                            @click="mobileMenuOpen = false"
+                        >
+                            首页
+                        </router-link>
+                        <router-link
+                            class="rounded-lg px-3 py-2.5 font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            :class="route.path === '/creator' ? 'bg-accent text-foreground' : ''"
+                            to="/creator"
+                            @click="mobileMenuOpen = false"
+                        >
+                            创作中心
+                        </router-link>
+                    </nav>
                 </div>
-                <nav class="flex flex-col gap-1 text-sm">
-                    <router-link class="rounded-md px-2 py-2 text-muted-foreground hover:bg-accent hover:text-foreground" to="/" @click="mobileMenuOpen = false">首页</router-link>
-                    <router-link class="rounded-md px-2 py-2 text-muted-foreground hover:bg-accent hover:text-foreground" to="/creator" @click="mobileMenuOpen = false">创作中心</router-link>
-                </nav>
-            </div>
+            </Transition>
         </header>
 
-        <main class="mx-auto max-w-[1200px] px-4 py-4 sm:py-6">
+        <main class="mx-auto w-full max-w-[1200px] flex-1 px-4 py-4 sm:py-6">
             <slot />
         </main>
-        <footer class="py-6 text-center text-xs text-muted-foreground">© Vistack</footer>
+
+        <footer class="border-t border-white/5 py-8">
+            <div class="mx-auto flex max-w-[1200px] flex-col items-center gap-4 px-4 sm:flex-row sm:justify-between">
+                <div class="flex items-center gap-2">
+                    <img src="/logo.png" alt="Vistack" class="h-6 w-6 rounded" />
+                    <span class="gradient-text text-sm font-bold">Vistack</span>
+                </div>
+                <p class="text-xs text-muted-foreground">© {{ new Date().getFullYear() }} Vistack · 高端视频平台</p>
+                <div class="flex items-center gap-4 text-xs text-muted-foreground">
+                    <a href="#" class="transition-colors hover:text-foreground">关于我们</a>
+                    <a href="#" class="transition-colors hover:text-foreground">用户协议</a>
+                    <a href="#" class="transition-colors hover:text-foreground">隐私政策</a>
+                </div>
+            </div>
+        </footer>
     </div>
 </template>
 
 <style scoped>
+.dropdown-enter-active,
+.dropdown-leave-active {
+    transition:
+        opacity 0.18s ease,
+        transform 0.18s ease;
+}
+.dropdown-enter-from,
+.dropdown-leave-to {
+    opacity: 0;
+    transform: translateY(-6px);
+}
 </style>

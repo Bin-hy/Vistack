@@ -2,15 +2,46 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  ::selection {
+    background-color: hsl(var(--primary) / 0.32);
+    color: hsl(var(--foreground));
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 9999px;
+    border: 3px solid hsl(var(--background));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground) / 0.45);
+  }
+}
+
 @layer components {
   .glass {
-    background-color: hsl(var(--glass) / 0.04);
+    background-color: hsl(var(--glass) / 0.035);
     backdrop-filter: blur(16px) saturate(140%);
     -webkit-backdrop-filter: blur(16px) saturate(140%);
     border: 1px solid hsl(var(--glass-border) / 0.08);
   }
   .glass-strong {
-    background-color: hsl(var(--glass) / 0.08);
+    background-color: hsl(var(--glass) / 0.07);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
     border: 1px solid hsl(var(--glass-border) / 0.12);
@@ -21,43 +52,70 @@
     background-clip: text;
     color: transparent;
   }
+  .surface {
+    background-color: hsl(var(--secondary) / 0.55);
+    border: 1px solid hsl(var(--border));
+  }
+  .card-hover {
+    transition:
+      transform 0.25s ease,
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      background-color 0.25s ease;
+  }
+  .card-hover:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.35);
+    box-shadow: 0 12px 40px -16px hsl(var(--primary) / 0.45);
+  }
 }
 
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family:
+    'Inter',
+    'SF Pro Text',
+    'PingFang SC',
+    'HarmonyOS Sans SC',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    'Helvetica Neue',
+    'Microsoft YaHei',
+    Arial,
+    sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: dark;
 
-  /* 基底 */
-  --background: 240 16% 4%;
-  --foreground: 220 20% 94%;
+  /* 基底 —— 深邃近黑，带冷调 */
+  --background: 240 28% 3.5%;
+  --foreground: 220 28% 96%;
 
-  /* 主色 indigo → violet 渐变 */
-  --primary: 243 75% 60%;
+  /* 主色 —— 电光靛蓝 → 紫罗兰渐变 */
+  --primary: 251 82% 63%;
   --primary-foreground: 0 0% 100%;
-  --gradient-from: 243 75% 60%;
-  --gradient-to: 258 90% 66%;
+  --gradient-from: 251 82% 60%;
+  --gradient-to: 270 88% 68%;
 
-  /* 表面 */
-  --secondary: 240 12% 12%;
-  --secondary-foreground: 220 20% 88%;
-  --accent: 243 30% 18%;
-  --accent-foreground: 220 20% 94%;
-  --muted: 240 12% 10%;
-  --muted-foreground: 220 12% 60%;
+  /* 表面层级 */
+  --secondary: 240 16% 10%;
+  --secondary-foreground: 220 22% 90%;
+  --accent: 250 36% 17%;
+  --accent-foreground: 220 22% 96%;
+  --muted: 240 16% 8%;
+  --muted-foreground: 220 14% 63%;
 
   /* 线条与控件 */
-  --border: 240 12% 16%;
-  --input: 240 12% 14%;
-  --ring: 243 75% 60%;
-  --destructive: 0 72% 55%;
+  --border: 240 16% 15%;
+  --input: 240 16% 13%;
+  --ring: 251 82% 63%;
+  --destructive: 0 72% 56%;
   --destructive-foreground: 0 0% 100%;
 
   /* 玻璃 */
-  --glass: 0 0% 100%;
-  --glass-border: 0 0% 100%;
+  --glass: 255 100% 100%;
+  --glass-border: 255 100% 100%;
 
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
@@ -84,8 +142,9 @@ body {
   color: hsl(var(--foreground));
   background-color: hsl(var(--background));
   background-image:
-    radial-gradient(ellipse 80% 50% at 20% -10%, hsl(var(--gradient-from) / 0.18), transparent),
-    radial-gradient(ellipse 60% 40% at 90% 0%, hsl(var(--gradient-to) / 0.14), transparent);
+    radial-gradient(ellipse 80% 60% at 15% -12%, hsl(var(--gradient-from) / 0.22), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 92% -6%, hsl(var(--gradient-to) / 0.18), transparent 58%),
+    radial-gradient(ellipse 55% 45% at 50% 112%, hsl(var(--gradient-from) / 0.09), transparent 62%);
   background-attachment: fixed;
 }
 

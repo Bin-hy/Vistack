@@ -30,10 +30,11 @@ function onInput(e: Event) {
 		:type="props.type"
 		:value="props.modelValue"
 		class="
-			flex h-11 w-full rounded-md border border-border bg-input px-3 py-2 text-sm text-foreground
+			flex h-11 w-full rounded-md border border-border bg-input/80 px-3 py-2 text-sm text-foreground
 			placeholder:text-muted-foreground
-			focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-			transition-colors
+			transition-all duration-200
+			focus-visible:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:bg-input
+			hover:border-border/80
 			[&:disabled]:cursor-not-allowed [&:disabled]:opacity-60
 			" :class="props.class"
 		@input="onInput"
