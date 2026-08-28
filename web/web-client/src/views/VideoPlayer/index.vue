@@ -6,6 +6,8 @@ import DashPlayer from '@/components/player-dash/DashPlayer.vue'
 import { UiIcon } from '@/components/ui'
 import { baseURL, get, post } from '@/lib/http'
 import { formatCount } from '@/lib/format'
+import { useUserStore } from '@/stores/user'
+import { toast } from '@/components/ui/toast/useToast'
 import { getVideoSegmentsSignature, type VideoSegmentsSignatureCredentials } from './index'
 import { getVideoRecommend, type VideoItem } from '@/views/Index/api/api'
 
@@ -26,6 +28,7 @@ interface VideoInfo {
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const videoId = computed(() => route.params.id as string)
 
@@ -140,6 +143,10 @@ async function reportPlay(id: string) {
 
 function toggleLike() {
 	if (!videoId.value) return
+	if (!userStore.isLoggedIn) {
+		toast({ title: '请先登录', type: 'error' })
+		return
+	}
 	post<{ liked: boolean; like_count: number }>(`/videos/${videoId.value}/like`)
 		.then((resp) => {
 			hasLiked.value = resp.liked
@@ -150,6 +157,10 @@ function toggleLike() {
 
 function toggleFavorite() {
 	if (!videoId.value) return
+	if (!userStore.isLoggedIn) {
+		toast({ title: '请先登录', type: 'error' })
+		return
+	}
 	post<{ favorited: boolean; favorite_count: number }>(`/videos/${videoId.value}/favorite`)
 		.then((resp) => {
 			hasFavorited.value = resp.favorited
