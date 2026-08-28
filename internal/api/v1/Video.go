@@ -45,16 +45,19 @@ type VideoAuthorResponse struct {
 }
 
 type VideoInfoResponse struct {
-	ID          string               `json:"id"`
-	Title       string               `json:"title"`
-	Description *string              `json:"description,omitempty"`
-	CoverURL    string               `json:"cover_url"`
-	Duration    int                  `json:"duration"`
-	Status      string               `json:"status"`
-	Visibility  string               `json:"visibility"`
-	CreatedAt   time.Time            `json:"created_at"`
-	UpdatedAt   time.Time            `json:"updated_at"`
-	User        *VideoAuthorResponse `json:"user,omitempty"`
+	ID            string               `json:"id"`
+	Title         string               `json:"title"`
+	Description   *string              `json:"description,omitempty"`
+	CoverURL      string               `json:"cover_url"`
+	Duration      int                  `json:"duration"`
+	Status        string               `json:"status"`
+	Visibility    string               `json:"visibility"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	User          *VideoAuthorResponse `json:"user,omitempty"`
+	PlayCount     int64                `json:"play_count"`
+	LikeCount     int64                `json:"like_count"`
+	FavoriteCount int64                `json:"favorite_count"`
 }
 
 // VideoInitRequest 初始化分片上传请求
@@ -523,7 +526,7 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 
 		author := resolveAuthor(ctx, video.UserID)
 
-		return VideoInfoResponse{
+		resp := VideoInfoResponse{
 			ID:          strconv.FormatInt(video.ID, 10),
 			Title:       video.Title,
 			Description: video.Description,
@@ -534,7 +537,9 @@ func (v *VideoApi) GetVideoInfo(c *gin.Context) {
 			CreatedAt:   video.CreatedAt,
 			UpdatedAt:   video.UpdatedAt,
 			User:        author,
-		}, true, nil
+		}
+		enrichCounts(ctx, []mVideo.Video{video}, []VideoInfoResponse{resp})
+		return resp, true, nil
 	}, cache.WithBloom())
 	if err != nil {
 		core.Logger.Error("get video info failed", zap.Error(err))
@@ -908,6 +913,7 @@ func (v *VideoApi) GetVideoRecommend(c *gin.Context) {
 				User:        authors[video.UserID],
 			})
 		}
+		enrichCounts(ctx, videos, respList)
 		return VideoRecommendResponse{Videos: respList}, true, nil
 	}, cache.WithTTL(ttl, ttl)); err != nil {
 		core.Logger.Error("get recommend videos failed", zap.Error(err))

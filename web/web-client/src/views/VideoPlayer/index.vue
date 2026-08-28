@@ -4,7 +4,8 @@ import { useRoute, useRouter } from 'vue-router'
 import BiliLayout from '@/layouts/BiliLayout.vue'
 import DashPlayer from '@/components/player-dash/DashPlayer.vue'
 import { UiIcon } from '@/components/ui'
-import { baseURL, get } from '@/lib/http'
+import { baseURL, get, post } from '@/lib/http'
+import { formatCount } from '@/lib/format'
 import { getVideoSegmentsSignature, type VideoSegmentsSignatureCredentials } from './index'
 import { getVideoRecommend, type VideoItem } from '@/views/Index/api/api'
 
@@ -41,6 +42,12 @@ const videoInfo = ref<VideoInfo | null>(null)
 
 const hasLiked = ref(false)
 const hasFavorited = ref(false)
+
+const stats = ref<{ like_count: number; favorite_count: number; play_count: number }>({
+	like_count: 0,
+	favorite_count: 0,
+	play_count: 0,
+})
 
 const relatedVideos = ref<VideoItem[]>([])
 const relatedLoading = ref(false)
@@ -103,12 +110,52 @@ async function loadRelated() {
 	}
 }
 
+async function loadStats(id: string) {
+	try {
+		const resp = await get<{ like_count: number; favorite_count: number; play_count: number }>(`/videos/${id}/stats`)
+		stats.value = resp
+	} catch {
+		// 静默忽略
+	}
+}
+
+async function loadInteraction(id: string) {
+	try {
+		const resp = await get<{ liked: boolean; favorited: boolean }>(`/videos/${id}/interaction`)
+		hasLiked.value = resp.liked
+		hasFavorited.value = resp.favorited
+	} catch {
+		// 未登录时静默忽略
+	}
+}
+
+async function reportPlay(id: string) {
+	try {
+		const resp = await post<{ play_count: number }>(`/videos/${id}/play`)
+		stats.value.play_count = resp.play_count
+	} catch {
+		// 静默忽略
+	}
+}
+
 function toggleLike() {
-	hasLiked.value = !hasLiked.value
+	if (!videoId.value) return
+	post<{ liked: boolean; like_count: number }>(`/videos/${videoId.value}/like`)
+		.then((resp) => {
+			hasLiked.value = resp.liked
+			stats.value.like_count = resp.like_count
+		})
+		.catch(() => {})
 }
 
 function toggleFavorite() {
-	hasFavorited.value = !hasFavorited.value
+	if (!videoId.value) return
+	post<{ favorited: boolean; favorite_count: number }>(`/videos/${videoId.value}/favorite`)
+		.then((resp) => {
+			hasFavorited.value = resp.favorited
+			stats.value.favorite_count = resp.favorite_count
+		})
+		.catch(() => {})
 }
 
 function handleForward() {}
@@ -139,6 +186,9 @@ onMounted(() => {
 		loadSignature(videoId.value)
 		loadVideoInfo(videoId.value)
 		loadRelated()
+		loadStats(videoId.value)
+		loadInteraction(videoId.value)
+		reportPlay(videoId.value)
 	}
 })
 
@@ -150,6 +200,9 @@ watch(
 			loadSignature(id)
 			loadVideoInfo(id)
 			loadRelated()
+			loadStats(id)
+			loadInteraction(id)
+			reportPlay(id)
 		}
 	},
 )
@@ -182,6 +235,20 @@ onBeforeUnmount(() => {
 					<h1 class="text-lg font-semibold leading-snug sm:text-xl">
 						{{ videoInfo?.title || '视频标题' }}
 					</h1>
+					<div class="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+						<span class="flex items-center gap-1.5">
+							<UiIcon name="play" :size="14" />
+							{{ formatCount(stats.play_count) }} 播放
+						</span>
+						<span class="flex items-center gap-1.5">
+							<UiIcon name="thumbs-up" :size="14" />
+							{{ formatCount(stats.like_count) }} 点赞
+						</span>
+						<span class="flex items-center gap-1.5">
+							<UiIcon name="bookmark" :size="14" />
+							{{ formatCount(stats.favorite_count) }} 收藏
+						</span>
+					</div>
 					<div class="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
 						<span v-if="formattedDate" class="flex items-center gap-1.5">
 							<UiIcon name="clock" :size="14" /> 发布于 {{ formattedDate }}

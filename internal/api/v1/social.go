@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
@@ -235,4 +236,26 @@ func firstNonNil(errs ...error) error {
 		}
 	}
 	return nil
+}
+
+// enrichCounts 从 Redis 读取三计数并填充到视频响应列表（计数读取失败则保持 0）。
+func enrichCounts(ctx context.Context, videos []mVideo.Video, list []VideoInfoResponse) {
+	if interactionService == nil || len(videos) == 0 || len(list) != len(videos) {
+		return
+	}
+	ids := make([]int64, 0, len(videos))
+	for _, v := range videos {
+		ids = append(ids, v.ID)
+	}
+	counts, err := interactionService.Counts(ctx, ids)
+	if err != nil {
+		return
+	}
+	for i := range list {
+		if cc, ok := counts[videos[i].ID]; ok {
+			list[i].PlayCount = cc.PlayCount
+			list[i].LikeCount = cc.LikeCount
+			list[i].FavoriteCount = cc.FavoriteCount
+		}
+	}
 }

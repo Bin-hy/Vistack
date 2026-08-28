@@ -16,6 +16,9 @@ export interface VideoItem {
 	visibility: string
 	created_at: string
 	updated_at: string
+	play_count?: number
+	like_count?: number
+	favorite_count?: number
 	user?: VideoAuthor
 }
 

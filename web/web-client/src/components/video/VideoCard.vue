@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { VideoItem } from '@/views/Index/api/api'
 import { UiIcon } from '@/components/ui'
+import { formatCount } from '@/lib/format'
 
 const props = defineProps<{ video: VideoItem }>()
 const router = useRouter()
@@ -73,6 +74,15 @@ function handleClick() {
         </span>
       </div>
 
+      <!-- Play count badge -->
+      <div
+        v-if="video.play_count"
+        class="absolute bottom-2 left-2 flex items-center gap-1 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm"
+      >
+        <UiIcon name="play" :size="12" />
+        {{ formatCount(video.play_count) }}
+      </div>
+
       <!-- Duration Badge -->
       <div
         class="absolute bottom-2 right-2 rounded-md bg-black/70 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white backdrop-blur-sm"
@@ -103,6 +113,11 @@ function handleClick() {
           <span v-if="video.user" class="truncate transition-colors hover:text-foreground">{{ video.user.nickname }}</span>
           <span v-if="video.user" class="text-muted-foreground/50">·</span>
           <span class="shrink-0">{{ formattedDate }}</span>
+          <span v-if="video.like_count" class="text-muted-foreground/50">·</span>
+          <span v-if="video.like_count" class="flex shrink-0 items-center gap-1">
+            <UiIcon name="thumbs-up" :size="12" />
+            {{ formatCount(video.like_count) }}
+          </span>
         </div>
       </div>
     </div>
