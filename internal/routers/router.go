@@ -2,6 +2,7 @@ package routers
 
 import (
 	"github.com/binhy/vistack/internal/middlewares"
+	"github.com/binhy/vistack/internal/middlewares/ratelimit"
 	v1 "github.com/binhy/vistack/internal/routers/api/v1"
 	authpkg "github.com/binhy/vistack/pkg/auth"
 	"github.com/gin-gonic/gin"
@@ -9,8 +10,9 @@ import (
 
 // RegisterRoutes 统一注册所有子路由。
 // validator 用于受保护路由的本地验签（api 用 JWKS TokenVerifier）。
+// limiter 用于登录后接口的用户级限流（nil 表示不限流）。
 // 认证与用户资料路由已迁至 auth 服务，此处不再注册。
-func RegisterRoutes(r *gin.Engine, validator authpkg.TokenValidator) {
+func RegisterRoutes(r *gin.Engine, validator authpkg.TokenValidator, limiter ratelimit.Limiter) {
 	// 公共路由组
 	PublicGroup := r.Group("")
 	{
@@ -26,6 +28,7 @@ func RegisterRoutes(r *gin.Engine, validator authpkg.TokenValidator) {
 	// API v1 路由组, 需要认证路由
 	AuthApiGroup := r.Group("/api/v1")
 	AuthApiGroup.Use(middlewares.AuthMiddleware(validator))
+	AuthApiGroup.Use(middlewares.RateLimit(limiter))
 	{
 		v1.RouterGroupApp.InitFileRouter(AuthApiGroup)
 		v1.RouterGroupApp.InitVideoPrivatesRouter(AuthApiGroup)

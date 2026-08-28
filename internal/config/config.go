@@ -70,6 +70,16 @@ type AppConfig struct {
 		BloomHashes   int   `mapstructure:"bloom_hashes"`
 	} `mapstructure:"cache"`
 
+	// ratelimit: 登录后接口限流（令牌桶单机 / Redis 滑动窗口分布式）
+	RateLimit struct {
+		Enabled    bool   `mapstructure:"enabled"`
+		Algorithm  string `mapstructure:"algorithm"` // token_bucket | sliding_window
+		TokenRate  int    `mapstructure:"token_rate"`
+		TokenBurst int    `mapstructure:"token_burst"`
+		Window     int    `mapstructure:"window"` // 秒
+		Limit      int    `mapstructure:"limit"`
+	} `mapstructure:"ratelimit"`
+
 	Snowflake struct {
 		NodeID int64 `mapstructure:"node_id"`
 	} `mapstructure:"snowflake"`

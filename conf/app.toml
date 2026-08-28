@@ -45,6 +45,14 @@ bloom_enabled = true
 bloom_bits = 10000000
 bloom_hashes = 7
 
+[ratelimit]
+enabled = true
+algorithm = "sliding_window"
+token_rate = 10
+token_burst = 20
+window = 60
+limit = 100
+
 [snowflake]
 node_id = 0 # 0 = 自动从实例标识(hostname/POD_IP)派生，多副本避免 ID 冲突
 

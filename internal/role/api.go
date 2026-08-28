@@ -15,6 +15,7 @@ import (
 	"github.com/binhy/vistack/internal/authclient"
 	"github.com/binhy/vistack/internal/config"
 	"github.com/binhy/vistack/internal/core"
+	"github.com/binhy/vistack/internal/middlewares"
 	"github.com/binhy/vistack/internal/routers"
 	authpkg "github.com/binhy/vistack/pkg/auth"
 	"github.com/gin-gonic/gin"
@@ -70,8 +71,11 @@ func RunAPI(cfg *config.AppConfig) {
 		gin.SetMode(gin.DebugMode)
 	}
 
+	limiter := middlewares.BuildLimiter(cfg, core.Redis)
+	middlewares.SetLogger(core.Logger)
+
 	r := core.NewServer()
-	routers.RegisterRoutes(r, verifier)
+	routers.RegisterRoutes(r, verifier, limiter)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{Addr: addr, Handler: r}
