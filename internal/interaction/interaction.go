@@ -17,11 +17,11 @@ import (
 type EventType string
 
 const (
-	EventLike        EventType = "like"
-	EventUnlike      EventType = "unlike"
-	EventFavorite    EventType = "favorite"
-	EventUnfavorite  EventType = "unfavorite"
-	EventPlay        EventType = "play"
+	EventLike       EventType = "like"
+	EventUnlike     EventType = "unlike"
+	EventFavorite   EventType = "favorite"
+	EventUnfavorite EventType = "unfavorite"
+	EventPlay       EventType = "play"
 )
 
 // Event 待落库交互事件（Redis List 元素）。
