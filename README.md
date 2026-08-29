@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://vistack.pages.dev"><img src="https://img.shields.io/badge/Demo-Live-00A1D6?style=flat-square" alt="Demo"/></a>
+  <a href="https://cvistack.pages.dev"><img src="https://img.shields.io/badge/Demo-Live-00A1D6?style=flat-square" alt="Demo"/></a>
   <img src="https://img.shields.io/badge/Go-1.26-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go"/>
   <img src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vue.js&logoColor=white" alt="Vue"/>
   <img src="https://img.shields.io/badge/gRPC-1.82-244c5a?style=flat-square" alt="gRPC"/>
@@ -26,9 +26,9 @@
 
 **Vistack** 是一个面向高并发场景的分布式视频平台，同时支持**实时直播（Live Streaming）**与**视频点播（VOD）**。项目以「高并发、可水平扩展」为核心设计目标，实践了一套云原生的分布式转码与流媒体架构：任务队列解耦、gRPC 远程转码、etcd 服务发现、对象存储分发，全部可一键容器化并平滑迁移至 Kubernetes。此外还内置了一套高并发应用层能力——Redis 缓存三件套、分布式限流、点赞/收藏/播放量计数与热门榜单，覆盖面试高频的「高并发场景题」。
 
-> 🎯 在线体验：<https://vistack.pages.dev>
+> 🎯 在线体验：<https://cvistack.pages.dev>（用户端）· <https://cvistack.pages.dev/admin>（管理后台）
 >
-> 📖 使用说明与设计文档：<https://github.com/binhy/vistack-docs>（VitePress 站点，含快速开始、Docker 一键部署与各系统设计细节）
+> 📖 设计文档与专项 Spec：<https://github.com/Bin-hy/Vistack/tree/main/docs>（缓存 / 限流 / 点赞 / 弹幕 / 评论 / 认证 / 转码等各子系统设计）
 
 ## 🚀 核心特性
 
@@ -55,6 +55,13 @@
 - **分布式限流**：登录后接口按用户 ID 限流，令牌桶（单机）+ Redis Lua 滑动窗口（分布式）两种算法可配置切换，429 + `Retry-After` + `X-RateLimit-*`，Redis 不可用 fail-open。
 - **点赞/收藏/播放量**：Redis Set 去重计数 + 播放 `INCR`，Lua 原子 toggle、事件队列异步批量落库（幂等），`videos` 冗余计数列 + 明细表，ZSet 热门榜单。
 
+### 弹幕与评论
+- **弹幕**：Redis ZSet 时间轴 + Kafka 异步落库，AC 自动机敏感词过滤，前端支持颜色与滚动/顶部/底部模式。
+- **评论**：楼中楼父子结构 + 图片/表情包附件 + 内容审核 + 点赞 + 软删除。
+
+### 管理后台
+- 独立 Vue3 管理端（`web-admin`），产物内置 api 镜像并托管于 `/admin` 子路径，亦可随前端一起发布到 CDN；已包含违禁词管理，视频管理与统计概览持续迭代中。
+
 ## 🧩 系统架构
 
 ```mermaid
@@ -62,6 +69,7 @@ flowchart LR
     subgraph Client["客户端"]
         OBS[OBS 推流]
         Web[Web 前端<br/>Vue3 + dash.js]
+        Admin[管理后台<br/>Vue3 /admin]
     end
 
     subgraph Apps["应用服务 · 可独立扩容"]
@@ -72,6 +80,7 @@ flowchart LR
     end
 
     subgraph Infra["基础设施"]
+        GW[Traefik 网关<br/>路径分流]
         PG[(PostgreSQL)]
         R[(Redis)]
         M[(MinIO)]
@@ -80,10 +89,14 @@ flowchart LR
         SFU[live777 SFU]
     end
 
-    Web -->|HTTP /api/v1| API
+    Web -->|HTTP /api/v1| GW
+    Admin -->|HTTP /api/v1| GW
     OBS -->|RTMP/WHIP 推流| SFU
     Web -->|WebRTC 拉流| SFU
-    Web -->|注册/登录/资料| AUTH
+    GW -->|/api/v1/auth·user| AUTH
+    GW -->|/api/v1 其余| API
+    GW -->|/vistack 媒体| M
+
     API -->|JWKS 本地验签| AUTH
 
     API -->|投递转码/删除任务| K
@@ -97,7 +110,6 @@ flowchart LR
     Worker -->|租约/重试| R
     API --> PG
     API --> R
-    Web -->|播放 DASH / 封面| M
 ```
 
 ### 转码流水线
@@ -115,19 +127,22 @@ flowchart LR
 
 | 层级 | 技术 |
 |------|------|
-| 前端 | Vue 3 + Pinia + Tailwind CSS + dash.js / Video.js |
+| 前端 | Vue 3 + Pinia + Tailwind CSS + dash.js / Video.js（用户端 + 管理后台 `web-admin`） |
 | 后端 API | Go 1.26 + Gin + GORM + PostgreSQL + Redis |
 | 认证 | 独立 Auth 服务（RSA RS256 + JWKS + gRPC 用户查询 + etcd 注册） |
 | 缓存 | Redis Cache-Aside（穿透/击穿/雪崩 + 布隆过滤器） |
 | 限流 | 令牌桶（单机）+ Redis Lua 滑动窗口（分布式） |
 | 社交互动 | Redis Set/INCR 计数 + 异步批量落库 + ZSet 榜单 |
+| 弹幕/评论 | 弹幕：Redis ZSet + Kafka 落库 + AC 敏感词；评论：楼中楼 + 附件 + 审核 |
 | 服务通信 | gRPC + Protobuf（buf 生成） |
 | 服务发现 | etcd |
 | 任务队列 | Kafka（segmentio/kafka-go）+ Redis 延迟队列 |
 | 转码 | FFmpeg / FFprobe（独立 transcoder 容器） |
 | 对象存储 | MinIO（S3 兼容） |
 | 直播 | live777（Rust SFU） |
-| 部署 | Docker Compose / Kubernetes |
+| 网关 | Traefik（`/api/v1/auth·user` → auth，`/api/v1` → api，`/vistack` → MinIO 媒体，`/` → 前端页面） |
+| 前端托管 | Docker 镜像内置 / CDN 发布（`deploy/cdn-publish.sh` → Cloudflare Pages / S3） |
+| 部署 | Docker Compose / Kubernetes / Cloudflare Pages |
 | 可观测性 | zap 结构化日志（预留 Prometheus/Grafana） |
 
 ## 📁 目录结构
@@ -157,10 +172,11 @@ Vistack
 ├── proto/transcoder/v1/    # gRPC 契约（buf）
 ├── migrations/             # GORM 自动迁移
 ├── conf/                   # app.toml / app.local.toml / app.docker.toml 配置
-├── deploy/                 # Kubernetes 清单 + Traefik 网关配置
+├── docs/                   # 设计文档与专项 Spec（缓存/限流/点赞/弹幕/评论/认证/转码等）
+├── deploy/                 # Kubernetes 清单 + Traefik 网关配置 + cdn-publish.sh（一键发前端到 CDN）
 ├── web/                    # pnpm monorepo：ui / web-client / web-admin
 ├── Dockerfile              # 双 target：vistack / vistack-transcoder
-└── compose.yml             # 一键起栈
+└── compose.yml             # 一键起栈（compose.server.yml 为服务器部署 override）
 ```
 
 ## 🚀 快速开始
@@ -172,10 +188,20 @@ cp .env.example .env.local
 docker compose up --build -d
 ```
 
-启动后包含 **api(8080) / auth(8081) / worker / transcoder / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务，**打开 <http://localhost> 即用户端界面**（前端产物内置在 api 镜像中，Traefik 兜底路由代理）。水平扩容转码：
+启动后包含 **api(8080) / auth(8081) / worker / transcoder / Traefik(80) / etcd / PostgreSQL / Redis / MinIO / Kafka** 全套服务，**打开 <http://localhost> 即用户端界面**（前端产物内置在 api 镜像中，Traefik 兜底路由代理），**<http://localhost/admin> 为管理后台**。水平扩容转码：
 
 ```bash
 docker compose up --scale transcoder=3 -d
+```
+
+> 宿主机 80/443 被占用（如 Dokploy）时，可用环境变量换端口：`TRAEFIK_HTTP_PORT=8082 TRAEFIK_DASHBOARD_PORT=8083 docker compose up -d`；若服务器已有统一网关，可用 `docker compose -f compose.yml -f compose.server.yml up -d` 跳过自有 Traefik，避免端口冲突。
+
+**前端发布到 CDN**（Cloudflare Pages / S3，用户端与管理端合并发布、内置 SPA 回退规则）：
+
+```bash
+./deploy/cdn-publish.sh dry     # 仅构建 + 合并布局（预检）
+./deploy/cdn-publish.sh pages   # Cloudflare Pages（需 CF_PROJECT_NAME 与 wrangler）
+./deploy/cdn-publish.sh s3      # S3 兼容对象存储（需 CDN_BUCKET，配合 mc / aws）
 ```
 
 ### 方式二：本地开发
@@ -196,7 +222,7 @@ pnpm install
 pnpm run dev      # 启动 web-client(:8335) 与 web-admin(:8334)
 ```
 
-> 前端通过 `web/*/.env.development` 中的 `VITE_API_BASE` 指向 API，默认 `http://localhost:8333/api/v1`；请确保其与后端实际监听端口一致。
+> 前端通过 `web/*/.env.development` 中的 `VITE_API_BASE` 指向 API：默认 `http://localhost/api/v1`（经 compose 中 Traefik :80 反代分流），未设置时回退为同源 `/api`（CDN 场景由网关反代）；本地直连后端可改为 `http://localhost:8080/api/v1`（API 默认监听 :8080），请确保与后端实际监听端口一致。
 
 ## 🔧 配置
 
@@ -204,7 +230,7 @@ pnpm run dev      # 启动 web-client(:8335) 与 web-admin(:8334)
 
 | 配置段 | 说明 |
 |--------|------|
-| `[server]` | HTTP 监听地址/端口 |
+| `[server]` | HTTP 监听地址/端口、用户端/管理端产物目录（`web_dir` / `admin_web_dir`） |
 | `[database]` / `[redis]` | PostgreSQL / Redis 连接 |
 | `[minio]` | 对象存储端点、凭证、桶 |
 | `[kafka]` | 消息队列 brokers 与消费组 |
@@ -235,18 +261,6 @@ pnpm run dev      # 启动 web-client(:8335) 与 web-admin(:8334)
 | 社交互动 | `video_comments` | 评论（父子结构） |
 | | `video_likes` / `video_favorites` | 点赞 / 收藏（复合主键；Redis Set 去重计数，异步落库） |
 | 播放统计 | `video_play_logs` | 播放日志（用户、时间、IP、UA；播放量 Redis `INCR`，异步落库） |
-
-## 🗺️ Roadmap
-
-- [ ] 压测与性能对比报告（k6/wrk：缓存/限流/点赞 优化前后 QPS/P99）
-- [ ] 点赞/播放计数 Redis 持久化与重启重建（防止计数丢失）
-- [ ] 播放上报 IP 限流（防匿名刷量）
-- [ ] 布隆过滤器定期重建（防 `Add` 失败导致的假阴性）
-- [ ] 转码进度实时上报（server-streaming）
-- [ ] gRPC mTLS 鉴权
-- [ ] etcd 集群高可用
-- [ ] Prometheus / Grafana 可观测性接入
-- [ ] HLS 兼容输出
 
 ## 🤝 贡献
 
