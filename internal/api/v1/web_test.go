@@ -10,23 +10,28 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// TestRegisterWebStatic 验证前端静态托管：
-//   - / 与静态资源正常返回
+// TestRegisterWebStatic 验证前端静态托管（用户端 + 管理端）：
+//   - / 与静态资源正常返回（用户端）
+//   - /admin 子路径返回管理端（含其静态资源与 SPA 回退）
 //   - SPA 客户端路由（如 /video/123）回退到 index.html
 //   - 显式 API 路由优先于静态兜底
 //   - 未匹配的 /api/* 保持 404，不返回 HTML
 func TestRegisterWebStatic(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	// 构造最小前端产物目录
-	dir := t.TempDir()
-	mustWrite(t, filepath.Join(dir, "index.html"), "<html>spa-index</html>")
-	mustWrite(t, filepath.Join(dir, "logo.png"), "png-bytes")
-	mustWrite(t, filepath.Join(dir, "assets", "app.js"), "console.log(1)")
+	// 构造最小前端产物目录：用户端 + 管理端
+	webDir := t.TempDir()
+	mustWrite(t, filepath.Join(webDir, "index.html"), "<html>spa-client</html>")
+	mustWrite(t, filepath.Join(webDir, "logo.png"), "png-bytes")
+	mustWrite(t, filepath.Join(webDir, "assets", "app.js"), "console.log('client')")
+
+	adminDir := t.TempDir()
+	mustWrite(t, filepath.Join(adminDir, "index.html"), "<html>spa-admin</html>")
+	mustWrite(t, filepath.Join(adminDir, "assets", "admin.js"), "console.log('admin')")
 
 	r := gin.New()
 	r.GET("/health", func(c *gin.Context) { c.String(http.StatusOK, "ok") })
-	RegisterWebStatic(r, dir)
+	RegisterWebStatic(r, webDir, adminDir)
 
 	cases := []struct {
 		name string
@@ -34,13 +39,18 @@ func TestRegisterWebStatic(t *testing.T) {
 		code int
 		body string
 	}{
-		{"根路径", "/", 200, "<html>spa-index</html>"},
-		{"静态资源", "/assets/app.js", 200, "console.log(1)"},
-		{"public 文件", "/logo.png", 200, "png-bytes"},
-		{"SPA 客户端路由回退", "/video/123", 200, "<html>spa-index</html>"},
-		{"深层 SPA 路由", "/user/profile/settings", 200, "<html>spa-index</html>"},
+		{"用户端根路径", "/", 200, "<html>spa-client</html>"},
+		{"用户端静态资源", "/assets/app.js", 200, "console.log('client')"},
+		{"用户端 public 文件", "/logo.png", 200, "png-bytes"},
+		{"用户端 SPA 回退", "/video/123", 200, "<html>spa-client</html>"},
+		{"用户端深层 SPA", "/user/profile/settings", 200, "<html>spa-client</html>"},
+		{"管理端根路径", "/admin", 200, "<html>spa-admin</html>"},
+		{"管理端带斜杠", "/admin/", 200, "<html>spa-admin</html>"},
+		{"管理端静态资源", "/admin/assets/admin.js", 200, "console.log('admin')"},
+		{"管理端 SPA 回退", "/admin/sensitive-words", 200, "<html>spa-admin</html>"},
 		{"显式 API 路由优先", "/health", 200, "ok"},
 		{"未匹配 API 保持 404", "/api/v1/unknown", 404, ""},
+		{"管理端下 API 保持 404", "/admin/api/v1/unknown", 404, ""},
 	}
 	for _, c := range cases {
 		w := httptest.NewRecorder()
@@ -56,13 +66,12 @@ func TestRegisterWebStatic(t *testing.T) {
 	}
 }
 
-// TestRegisterWebStaticEmptyDir web_dir 为空或目录不存在时不注册静态路由
+// TestRegisterWebStaticEmptyDir web_dir / admin_web_dir 为空或不存在时不注册静态路由
 func TestRegisterWebStaticEmptyDir(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	r := gin.New()
-	RegisterWebStatic(r, "")            // 空路径
-	RegisterWebStatic(r, "/no/such/dir") // 不存在
+	RegisterWebStatic(r, "", "/no/such/dir")
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

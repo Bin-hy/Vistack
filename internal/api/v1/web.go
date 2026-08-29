@@ -31,24 +31,50 @@ func (s *spaFileSystem) Open(name string) (http.File, error) {
 	return s.dir.Open(s.indexPath)
 }
 
-// RegisterWebStatic 托管前端构建产物（Vite 输出目录）。
-// 仅在 webDir 非空且目录存在时生效；已注册的 /api/v1 等显式路由优先，
-// 未匹配请求（页面、/assets/*、SPA 客户端路由）由 NoRoute 兜底交给静态服务。
-func RegisterWebStatic(r *gin.Engine, webDir string) {
-	if webDir == "" {
-		return
+// RegisterWebStatic 托管前端构建产物：
+//   - webDir      用户端产物（Vite 输出目录），托管于根路径 /
+//   - adminWebDir 管理端产物，托管于 /admin/ 子路径（构建时需 VITE_BASE=/admin/）
+//
+// 仅在目录存在时生效；已注册的 /api/v1 等显式路由优先，未匹配请求由 NoRoute 兜底交给静态服务。
+func RegisterWebStatic(r *gin.Engine, webDir, adminWebDir string) {
+	var clientHandler http.Handler
+	if abs, ok := existingDir(webDir); ok {
+		clientHandler = http.FileServer(&spaFileSystem{dir: http.Dir(abs), indexPath: "/index.html"})
 	}
-	abs, err := filepath.Abs(webDir)
-	if err != nil {
-		return
+
+	var adminHandler http.Handler
+	if abs, ok := existingDir(adminWebDir); ok {
+		adminHandler = http.StripPrefix("/admin", http.FileServer(&spaFileSystem{dir: http.Dir(abs), indexPath: "/index.html"}))
 	}
-	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+
+	if clientHandler == nil && adminHandler == nil {
 		return
 	}
 
-	fs := &spaFileSystem{dir: http.Dir(abs), indexPath: "/index.html"}
-	fileServer := http.FileServer(fs)
 	r.NoRoute(func(c *gin.Context) {
-		fileServer.ServeHTTP(c.Writer, c.Request)
+		p := c.Request.URL.Path
+		if adminHandler != nil && (p == "/admin" || strings.HasPrefix(p, "/admin/")) {
+			adminHandler.ServeHTTP(c.Writer, c.Request)
+			return
+		}
+		if clientHandler != nil {
+			clientHandler.ServeHTTP(c.Writer, c.Request)
+			return
+		}
+		c.String(http.StatusNotFound, "404 page not found")
 	})
+}
+
+func existingDir(dir string) (string, bool) {
+	if dir == "" {
+		return "", false
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	if st, err := os.Stat(abs); err != nil || !st.IsDir() {
+		return "", false
+	}
+	return abs, true
 }

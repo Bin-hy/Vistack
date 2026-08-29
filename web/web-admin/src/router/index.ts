@@ -29,7 +29,8 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory("/"),
+  // BASE_URL 与 vite base 对齐：本地 dev 为 "/"，Docker 镜像内构建为 "/admin/"
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes,
 })
 

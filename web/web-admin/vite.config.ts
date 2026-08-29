@@ -14,7 +14,8 @@ export default ({ mode }: ConfigEnv) => {
     build: {
       outDir: resolve(ProjectRoot, "build/web-admin",)
     },
-    base: '/',
+    // base 支持环境变量覆盖（Docker 镜像内构建管理端时 VITE_BASE=/admin/，托管于子路径）
+    base: process.env.VITE_BASE || '/',
     server:{
       port: 8334,
       host: "0.0.0.0"
