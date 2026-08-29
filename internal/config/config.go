@@ -5,8 +5,8 @@ type AppConfig struct {
 	Server struct {
 		Host        string `mapstructure:"host"`
 		Port        int    `mapstructure:"port"`
-		Mode        string `mapstructure:"mode"`         // debug/release/test
-		WebDir      string `mapstructure:"web_dir"`      // 用户端产物目录（api 托管于 /，空 = 不托管）
+		Mode        string `mapstructure:"mode"`          // debug/release/test
+		WebDir      string `mapstructure:"web_dir"`       // 用户端产物目录（api 托管于 /，空 = 不托管）
 		AdminWebDir string `mapstructure:"admin_web_dir"` // 管理端产物目录（api 托管于 /admin/，空 = 不托管）
 	} `mapstructure:"server"`
 

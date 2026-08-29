@@ -21,7 +21,7 @@ const (
 
 // CommentAttachment 评论附件（图片/表情包），有序，序列化后存于 VideoComment.Attachments JSONB。
 type CommentAttachment struct {
-	Type   string `json:"type"`   // "image"（图片）| "sticker"（表情包 GIF/PNG）
+	Type   string `json:"type"`    // "image"（图片）| "sticker"（表情包 GIF/PNG）
 	FileID int64  `json:"file_id"` // 引用 files.id
 }
 
