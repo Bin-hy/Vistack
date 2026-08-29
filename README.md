@@ -26,7 +26,7 @@
 
 **Vistack** 是一个面向高并发场景的分布式视频平台，同时支持**实时直播（Live Streaming）**与**视频点播（VOD）**。项目以「高并发、可水平扩展」为核心设计目标，实践了一套云原生的分布式转码与流媒体架构：任务队列解耦、gRPC 远程转码、etcd 服务发现、对象存储分发，全部可一键容器化并平滑迁移至 Kubernetes。此外还内置了一套高并发应用层能力——Redis 缓存三件套、分布式限流、点赞/收藏/播放量计数与热门榜单，覆盖面试高频的「高并发场景题」。
 
-> 🎯 在线体验：<https://cvistack.pages.dev>（用户端）· <https://cvistack.pages.dev/admin>（管理后台）
+> 🎯 在线体验：<https://cvistack.pages.dev>（用户端）
 >
 > 📖 设计文档与专项 Spec：<https://github.com/Bin-hy/Vistack/tree/main/docs>（缓存 / 限流 / 点赞 / 弹幕 / 评论 / 认证 / 转码等各子系统设计）
 
