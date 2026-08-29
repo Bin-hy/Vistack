@@ -1,0 +1,10 @@
+# 服务器部署用 override（与 compose.yml 配合）：
+#   docker compose -f compose.yml -f compose.server.yml up -d
+#
+# 适用场景：宿主机已有其他反向代理占用 80/443（如 Dokploy 自带的 Traefik）。
+# 效果：本项目的 traefik 容器进入 "local-only" profile，默认不启动（不占用 80/443）；
+# api(8080) / auth(8081) / minio(9000) 使用各自端口，
+# 由外部网关（如公网服务器 Caddy + frp 隧道）按路径分流。
+services:
+  traefik:
+    profiles: ["local-only"]
